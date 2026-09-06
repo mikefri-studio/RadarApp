@@ -9,11 +9,8 @@
     <application
         android:allowBackup="true"
         android:label="RadarApp"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MaterialComponents.DayNight">
-
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="TA_CLE_API_ICI"/>
 
         <activity
             android:name=".MainActivity"

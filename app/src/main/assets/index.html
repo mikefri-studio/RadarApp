@@ -1,0 +1,86 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>RadarApp</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html, body { margin:0; padding:0; height:100%; }
+  #map { width:100%; height:100%; }
+  #status { position:absolute; bottom:10px; left:10px; z-index:1000;
+            background:rgba(255,255,255,0.9); padding:6px 10px;
+            border-radius:6px; font-family:sans-serif; font-size:13px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status">Chargement des radars…</div>
+<script>
+var map = L.map('map').setView([46.6, 2.4], 6);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Tiles &copy; Esri',
+  maxZoom: 19
+}).addTo(map);
+
+var canvasRenderer = L.canvas({ padding: 0.5 });
+
+function parseCsv(text) {
+  var lines = text.split(/\r?\n/);
+  if (lines.length < 2) return [];
+  var header = lines[0].split(';').map(function(h){ return h.trim().toLowerCase(); });
+  var iLat = header.indexOf('latitude');
+  var iLng = header.indexOf('longitude');
+  var iType = header.indexOf('type');
+  var iVitesse = header.indexOf('vitesse_vehicules_legers_kmh');
+  if (iVitesse === -1) iVitesse = header.findIndex(function(h){ return h.indexOf('vitesse') !== -1; });
+  var iRoute = header.indexOf('route');
+  var iEmp = header.indexOf('emplacement');
+  var radars = [];
+  for (var i = 1; i < lines.length; i++) {
+    var p = lines[i].split(';');
+    if (p.length < 5) continue;
+    var lat = parseFloat((p[iLat] || '').replace(',', '.'));
+    var lng = parseFloat((p[iLng] || '').replace(',', '.'));
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) continue;
+    radars.push({
+      lat: lat,
+      lng: lng,
+      type: iType !== -1 ? p[iType] : 'Radar',
+      vitesse: iVitesse !== -1 ? p[iVitesse] : '',
+      route: iRoute !== -1 ? p[iRoute] : (iEmp !== -1 ? p[iEmp] : '')
+    });
+  }
+  return radars;
+}
+
+fetch('radars.csv')
+  .then(function(r){ return r.text(); })
+  .then(function(text){
+    var radars = parseCsv(text);
+    radars.forEach(function(r){
+      L.circleMarker([r.lat, r.lng], {
+        renderer: canvasRenderer,
+        radius: 6, color: '#d32f2f', fillColor: '#f44336', fillOpacity: 0.85
+      }).bindPopup('<b>' + r.type + '</b><br>' + (r.vitesse ? r.vitesse + ' km/h<br>' : '') + r.route)
+        .addTo(map);
+    });
+    document.getElementById('status').textContent = radars.length + ' radars affichés';
+  })
+  .catch(function(e){
+    document.getElementById('status').textContent = 'Erreur de chargement du CSV';
+  });
+
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var me = [pos.coords.latitude, pos.coords.longitude];
+    L.circleMarker(me, { radius: 8, color: '#1976d2', fillColor: '#2196f3', fillOpacity: 0.9 })
+      .bindPopup('Votre position').addTo(map);
+    map.setView(me, 11);
+  }, function(){}, { enableHighAccuracy: true });
+}
+</script>
+</body>
+</html>
