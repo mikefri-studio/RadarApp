@@ -343,6 +343,7 @@ function parseCsv(text) {
 // ==== ZOOM ADAPTATIF SELON LA VITESSE DE LA VOITURE ====
 (function () {
   var dernierChangement = 0;
+  var etaitEnRoute = false;
   var pauseJusqua = 0;
   function zoomPourVitesse(kmh) {
     if (kmh < 5)   return 16;
@@ -358,11 +359,20 @@ function parseCsv(text) {
       var v = pos.coords.speed;
       if (v == null) return;
       var kmh = v * 3.6;
-      var z = zoomPourVitesse(kmh);
       var now = Date.now();
-      if (Math.abs(map.getZoom() - z) >= 0.9 && now - dernierChangement > 4000) {
-        dernierChangement = now;
-        map.easeTo({ zoom: z, duration: 900 });
+      if (kmh >= 20) {
+        etaitEnRoute = true;
+        var z = zoomPourVitesse(kmh);
+        if (Math.abs(map.getZoom() - z) >= 0.9 && now - dernierChangement > 4000) {
+          dernierChangement = now;
+          map.easeTo({ zoom: z, duration: 900 });
+        }
+      } else if (kmh <= 5 && etaitEnRoute) {
+        etaitEnRoute = false;
+        if (now - dernierChangement > 4000) {
+          dernierChangement = now;
+          map.easeTo({ zoom: 15, duration: 900 });
+        }
       }
     }, function () {}, { enableHighAccuracy: true });
   }
