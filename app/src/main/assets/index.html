@@ -549,7 +549,7 @@ function parseCsv(text) {
 (function () {
   var hud = document.createElement('div');
   hud.id = 'hudVitesse';
-  hud.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9997;background:rgba(20,22,28,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:4px 18px 6px;color:#fff;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4);transition:background .3s,border-color .3s;';
+  hud.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9997;background:rgba(20,22,28,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:4px 18px 6px;color:#fff;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4);transition:background .3s,border-color .3s;';
   hud.innerHTML = '<div><span id="hudNum" style="font-size:30px;font-weight:800;line-height:1;">0</span><span style="font-size:11px;opacity:.7;margin-left:4px;">km/h</span></div><div id="hudLim" style="font-size:11px;height:14px;opacity:.9;"></div>';
   document.body.appendChild(hud);
   var flash = document.createElement('div');
