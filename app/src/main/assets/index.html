@@ -1,85 +1,342 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>RadarApp</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<title>RadarZen</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
 <style>
-  html, body { margin:0; padding:0; height:100%; }
+  html, body { margin:0; padding:0; height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#000; overscroll-behavior:none; }
   #map { width:100%; height:100%; }
-  #status { position:absolute; bottom:10px; left:10px; z-index:1000;
-            background:rgba(255,255,255,0.9); padding:6px 10px;
-            border-radius:6px; font-family:sans-serif; font-size:13px; }
+  .overlay { position:fixed; z-index:1000; }
+  #hud { top:0; left:0; right:0; background:linear-gradient(180deg, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.85) 100%);
+         color:#fff; display:flex; align-items:center; gap:14px; padding:8px 16px 10px 16px; box-shadow:0 2px 12px rgba(0,0,0,0.5); }
+  #brand { font-size:14px; font-weight:700; color:#ffb74d; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; }
+  #brand img { width:24px; height:24px; border-radius:6px; }
+  #speed { font-size:42px; font-weight:700; line-height:1; min-width:90px; }
+  #speed.over { color:#ff5252; text-shadow:0 0 10px rgba(255,82,82,0.5); }
+  #speed small { font-size:12px; font-weight:400; color:#aaa; margin-left:2px; }
+  .sign { width:56px; height:56px; border-radius:50%; background:radial-gradient(circle at 30% 30%, #fff 0%, #f5f5f5 100%);
+          border:6px solid #d32f2f; box-shadow:0 2px 8px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.1);
+          color:#000; font-weight:700; font-size:22px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  #next { margin-left:auto; text-align:right; }
+  #nextLabel { font-size:10px; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px; }
+  #nextDist { font-size:24px; font-weight:700; color:#ffb74d; line-height:1; }
+  #nextType { font-size:11px; color:#ccc; margin-top:2px; }
+  #hud.alerting { background:linear-gradient(180deg, rgba(180,30,30,0.95) 0%, rgba(180,30,30,0.85) 100%); }
+  #hud.alerting .sign { animation:pulse 0.8s infinite; }
+  @keyframes pulse { 0%{transform:scale(1);} 50%{transform:scale(1.08);} 100%{transform:scale(1);} }
+  #status { top:92px; left:10px; background:rgba(10,10,10,0.8); color:#ccc; padding:6px 10px; border-radius:6px; font-size:12px; backdrop-filter:blur(4px); }
+  #controls { bottom:12px; right:12px; display:flex; flex-direction:column; gap:10px; align-items:flex-end; }
+  #controls button { width:56px; height:56px; border:none; border-radius:16px; background:rgba(20,20,20,0.9); color:#fff;
+                     font-size:22px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.4); backdrop-filter:blur(8px);
+                     transition:all 0.2s; display:flex; align-items:center; justify-content:center; }
+  #controls button:active { transform:scale(0.92); }
+  #controls button.active { background:#ff9800; color:#000; box-shadow:0 4px 16px rgba(255,152,0,0.5); }
+  .maplibregl-popup-content { background:rgba(255,255,255,0.96); color:#222; border-radius:10px; padding:10px 14px;
+                              font-size:13px; line-height:1.5; box-shadow:0 4px 16px rgba(0,0,0,0.4); max-width:240px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="status">Chargement des radars…</div>
+<div id="hud" class="overlay">
+  <div id="brand"><img src="logo.png" alt=""/>RadarZen</div>
+  <div id="speed">-- <small>km/h</small></div>
+  <div id="limitSign" class="sign">–</div>
+  <div id="next">
+    <div id="nextLabel">Prochain radar</div>
+    <div id="nextDist">—</div>
+    <div id="nextType"></div>
+  </div>
+</div>
+<div id="status" class="overlay">Chargement...</div>
+<div id="controls" class="overlay">
+  <button id="btnFollow" class="active" onclick="toggleFollow()">🎯</button>
+  <button id="btnRoute" class="active" onclick="toggleRoute()">🛣️</button>
+  <button id="btnFeu" onclick="toggleFeu()">🚦</button>
+  <button id="btn50" onclick="toggle50()">🙈</button>
+</div>
 <script>
-var map = L.map('map').setView([46.6, 2.4], 6);
+var PMTILES_URL = 'https://huggingface.co/mikefri58/radarapp-maps/resolve/main/france-rues.pmtiles';
+var protocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', protocol.tile);
+var map = new maplibregl.Map({
+  container: 'map',
+  style: { version: 8,
+    glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+    sources: {
+    'basemap': { type: 'vector', url: 'pmtiles://' + PMTILES_URL, attribution: '© OpenStreetMap' }
+  }, layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': '#101014' } },
+    { id: 'earth', type: 'fill', source: 'basemap', 'source-layer': 'earth', paint: { 'fill-color': '#16161c' } },
+    { id: 'landuse', type: 'fill', source: 'basemap', 'source-layer': 'landuse', paint: { 'fill-color': '#1b1b22' } },
+    { id: 'water', type: 'fill', source: 'basemap', 'source-layer': 'water', paint: { 'fill-color': '#12283d' } },
+    { id: 'roads', type: 'line', source: 'basemap', 'source-layer': 'roads',
+      paint: { 'line-color': ['match', ['get', 'kind'], 'highway', '#8a7a4a', 'major_road', '#5a5a66', '#3c3c46'],
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 1.6, 15, 5] } },
+    { id: 'boundaries', type: 'line', source: 'basemap', 'source-layer': 'boundaries',
+      paint: { 'line-color': '#6a6a7a', 'line-width': 1, 'line-dasharray': [2, 2] } },
+    { id: 'place-labels', type: 'symbol', source: 'basemap', 'source-layer': 'places',
+      layout: {
+        'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 13, 14, 16],
+        'text-allow-overlap': false
+      },
+      paint: {
+        'text-color': '#d0d0d8',
+        'text-halo-color': 'rgba(0,0,0,0.85)',
+        'text-halo-width': 1.5
+      } },
+    { id: 'road-labels', type: 'symbol', source: 'basemap', 'source-layer': 'roads',
+      minzoom: 13,
+      layout: {
+        'symbol-placement': 'line',
+        'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 16, 12],
+        'symbol-spacing': 300
+      },
+      paint: {
+        'text-color': '#a8a8b2',
+        'text-halo-color': 'rgba(0,0,0,0.8)',
+        'text-halo-width': 1
+      } }
+  ] },
+  center: [2.35, 48.85], zoom: 5.5
+});
+var allRadars = [], byId = {}, userMarker = null, firstFix = true;
+var follow = true, routeMode = true, currentHeading = null;
+var filterFeu = false, filterHide50 = false, alerted = {};
+var mapReady = false, radarsPending = false, alertPopup = null;
+var ALERT_DIST = 500, SHOW_DIST = 2000, currentKmh = null, audioCtx = null;
 
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-  attribution: 'Tiles &copy; Esri',
-  maxZoom: 19
-}).addTo(map);
+map.on('dragstart', function(){ follow = false; updateBtns(); });
+map.on('load', function(){ mapReady = true; if (radarsPending) renderRadars(); });
+map.on('error', function(e){
+  var msg = e && e.error ? e.error.message : (e ? e.message : '');
+  if (msg) document.getElementById('status').textContent = 'Erreur : ' + msg;
+});
 
-var canvasRenderer = L.canvas({ padding: 0.5 });
-
+function haversine(lat1, lon1, lat2, lon2) {
+  var R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function bearing(lat1, lon1, lat2, lon2) {
+  var p1 = lat1*Math.PI/180, p2 = lat2*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  var y = Math.sin(dLon)*Math.cos(p2);
+  var x = Math.cos(p1)*Math.sin(p2) - Math.sin(p1)*Math.cos(p2)*Math.cos(dLon);
+  return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
+}
+function angleDiff(a, b) { var d = Math.abs(a-b) % 360; return d > 180 ? 360-d : d; }
+function fmtDist(d) {
+  if (d < 1000) return Math.round(d/10)*10 + ' m';
+  return (d/1000).toFixed(1).replace('.', ',') + ' km';
+}
+function beep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = 880; g.gain.value = 0.3;
+    o.start(); o.stop(audioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+function translateType(code) {
+  if (!code) return 'Radar';
+  code = code.trim().toUpperCase();
+  var m = { 'ET':'Radar fixe', 'ETF':'Radar fixe', 'ETD':'Discriminant VL/PL', 'ETC':'Chantier',
+            'ETCD':'Chantier discriminant', 'ETE':'Mobile embarqué', 'ETFR':'Feu rouge',
+            'ETT':'Tronçon (vitesse moy.)', 'ETM':'Mobile', 'ETP':'Passage à niveau',
+            'ETPN':'Passage à niveau', 'ETVM':'Vitesse moyenne', 'ETU':'Radar urbain' };
+  if (m[code]) return m[code];
+  if (code.indexOf('FR') !== -1) return 'Feu rouge';
+  if (code.indexOf('TT') !== -1) return 'Tronçon';
+  return 'Radar ' + code;
+}
+function radarInfoHTML(r, d) {
+  var html = '<b>' + translateType(r.type) + '</b><br>';
+  if (r.vitesse) html += '⚡ ' + r.vitesse + ' km/h<br>';
+  if (r.commune) html += '🏙️ ' + r.commune + '<br>';
+  if (r.route) html += '🛣️ ' + r.route + '<br>';
+  if (r.sens) html += '🧭 ' + r.sens + '<br>';
+  if (r.emplacement) html += '📌 ' + r.emplacement + '<br>';
+  if (r.date) html += '📅 ' + r.date.split(' ')[0] + '<br>';
+  if (d != null) html += '📍 ' + fmtDist(d);
+  return html;
+}
+function matchesFilters(r) {
+  if (filterFeu) {
+    var t = (r.type || '').toUpperCase();
+    if (t.indexOf('FR') === -1) return false;
+  }
+  if (filterHide50) {
+    var v = parseInt(r.vitesse, 10);
+    if (!isNaN(v) && v <= 50) return false;
+  }
+  return true;
+}
+function renderRadars() {
+  if (!mapReady) { radarsPending = true; return; }
+  var count = 0, features = [];
+  allRadars.forEach(function(r){
+    if (!matchesFilters(r)) return;
+    count++;
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+      properties: { id: r.id, type: r.type, vitesse: r.vitesse, route: r.route,
+                    commune: r.commune, sens: r.sens, emplacement: r.emplacement, date: r.date } });
+  });
+  var geojson = { type: 'FeatureCollection', features: features };
+  if (map.getSource('radars')) { map.getSource('radars').setData(geojson); }
+  else {
+    map.addSource('radars', { type: 'geojson', data: geojson });
+    map.addLayer({ id: 'radars', type: 'circle', source: 'radars',
+      paint: { 'circle-radius': 5, 'circle-color': '#ff5722', 'circle-stroke-width': 2, 'circle-stroke-color': '#ff9800' } });
+    map.on('click', 'radars', function(e){
+      var p = e.features[0].properties;
+      new maplibregl.Popup({ offset: 8 }).setLngLat(e.lngLat).setHTML(radarInfoHTML(byId[p.id] || p, null)).addTo(map);
+    });
+  }
+  document.getElementById('status').textContent = count + ' radars affichés';
+}
+function showRadarPopup(r, d) {
+  if (!alertPopup) {
+    alertPopup = new maplibregl.Popup({ closeButton: false, offset: 8 }).setLngLat([r.lng, r.lat]).setHTML(radarInfoHTML(r, d)).addTo(map);
+  } else {
+    alertPopup.setLngLat([r.lng, r.lat]).setHTML(radarInfoHTML(r, d));
+  }
+}
+function hideRadarPopup() { if (alertPopup) { alertPopup.remove(); alertPopup = null; } }
+function updateBtns() {
+  document.getElementById('btnFollow').className = follow ? 'active' : '';
+  document.getElementById('btnRoute').className = routeMode ? 'active' : '';
+  document.getElementById('btnFeu').className = filterFeu ? 'active' : '';
+  document.getElementById('btn50').className = filterHide50 ? 'active' : '';
+}
+function toggleFollow() { follow = !follow; updateBtns(); }
+function toggleRoute() { routeMode = !routeMode; updateBtns(); }
+function toggleFeu() { filterFeu = !filterFeu; updateBtns(); renderRadars(); if (filterFeu) fitToFiltered(); }
+function toggle50() { filterHide50 = !filterHide50; updateBtns(); renderRadars(); }
+function fitToFiltered() {
+  var pts = [];
+  allRadars.forEach(function(r){ if (matchesFilters(r)) pts.push([r.lng, r.lat]); });
+  if (pts.length) {
+    follow = false; updateBtns();
+    var bounds = new maplibregl.LngLatBounds(pts[0], pts[0]);
+    pts.forEach(function(p){ bounds.extend(p); });
+    map.fitBounds(bounds, { padding: 60, maxZoom: 12 });
+  }
+}
+function updateHud(nearest, dist) {
+  var hud = document.getElementById('hud');
+  var speedEl = document.getElementById('speed');
+  var signEl = document.getElementById('limitSign');
+  var distEl = document.getElementById('nextDist');
+  var typeEl = document.getElementById('nextType');
+  var limit = null;
+  if (nearest && dist <= SHOW_DIST) {
+    distEl.textContent = fmtDist(dist);
+    typeEl.textContent = translateType(nearest.type);
+    var v = parseInt(nearest.vitesse, 10);
+    if (!isNaN(v) && v > 0) { limit = v; signEl.textContent = v; } else signEl.textContent = '–';
+  } else { distEl.textContent = '—'; typeEl.textContent = ''; signEl.textContent = '–'; }
+  if (currentKmh != null) {
+    speedEl.innerHTML = currentKmh + ' <small>km/h</small>';
+    speedEl.className = (limit != null && currentKmh > limit) ? 'over' : '';
+  }
+  hud.className = (nearest && dist <= ALERT_DIST) ? 'overlay alerting' : 'overlay';
+}
+function checkProximity(lat, lng) {
+  var nearest = null, nearestDist = Infinity;
+  var corridor = routeMode && currentHeading != null && currentKmh != null && currentKmh > 7;
+  for (var i = 0; i < allRadars.length; i++) {
+    var r = allRadars[i];
+    var d = haversine(lat, lng, r.lat, r.lng);
+    if (d >= nearestDist) continue;
+    if (corridor) {
+      var diff = angleDiff(bearing(lat, lng, r.lat, r.lng), currentHeading);
+      if (diff > 90) continue;
+      if (d * Math.sin(diff * Math.PI / 180) > 150) continue;
+    }
+    nearestDist = d; nearest = r;
+  }
+  updateHud(nearest, nearestDist);
+  if (nearest && nearestDist <= ALERT_DIST) {
+    if (!alerted[nearest.id]) {
+      alerted[nearest.id] = true;
+      if (navigator.vibrate) navigator.vibrate([400,150,400]);
+      beep();
+    }
+    showRadarPopup(nearest, nearestDist);
+  } else { hideRadarPopup(); }
+  for (var id in alerted) {
+    var rad = byId[id];
+    if (rad && haversine(lat, lng, rad.lat, rad.lng) > 600) delete alerted[id];
+  }
+}
+function onPos(pos) {
+  var lat = pos.coords.latitude, lng = pos.coords.longitude;
+  if (pos.coords.heading != null && !isNaN(pos.coords.heading)) currentHeading = pos.coords.heading;
+  if (pos.coords.speed != null && !isNaN(pos.coords.speed) && pos.coords.speed >= 0) currentKmh = Math.round(pos.coords.speed * 3.6);
+  else currentKmh = null;
+  if (!userMarker) userMarker = new maplibregl.Marker({ color: '#2196f3' }).setLngLat([lng, lat]).addTo(map);
+  else userMarker.setLngLat([lng, lat]);
+  if (follow) {
+    if (firstFix) { map.jumpTo({ center: [lng, lat], zoom: 13 }); firstFix = false; }
+    else map.setCenter([lng, lat]);
+  }
+  checkProximity(lat, lng);
+}
+if (navigator.geolocation) navigator.geolocation.watchPosition(onPos, function(){}, { enableHighAccuracy: true, maximumAge: 1000 });
+window.addEventListener('csvLoaded', function() {
+  allRadars = parseCsv(window.csvData);
+  allRadars.forEach(function(r){ byId[r.id] = r; });
+  renderRadars();
+  updateBtns();
+});
 function parseCsv(text) {
   var lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
   var header = lines[0].split(';').map(function(h){ return h.trim().toLowerCase(); });
-  var iLat = header.indexOf('latitude');
-  var iLng = header.indexOf('longitude');
-  var iType = header.indexOf('type');
-  var iVitesse = header.indexOf('vitesse_vehicules_legers_kmh');
-  if (iVitesse === -1) iVitesse = header.findIndex(function(h){ return h.indexOf('vitesse') !== -1; });
-  var iRoute = header.indexOf('route');
-  var iEmp = header.indexOf('emplacement');
+  function findCol(keys) {
+    for (var k = 0; k < keys.length; k++)
+      for (var i = 0; i < header.length; i++)
+        if (header[i].indexOf(keys[k]) !== -1) return i;
+    return -1;
+  }
+  var iLat = findCol(['latitude']), iLng = findCol(['longitude']);
+  var iId = findCol(['numero', 'numéro', 'id']);
+  var iType = findCol(['type', 'categorie', 'controle']);
+  var iVit = findCol(['vma', 'vitesse']);
+  var iDate = findCol(['mise en service', 'date']);
+  var iRoute = findCol(['route', 'voie', 'axe']);
+  var iEmp = findCol(['emplacement', 'adresse', 'localisation']);
+  var iSens = findCol(['sens', 'direction']);
+  var iCom = findCol(['commune', 'ville']);
   var radars = [];
   for (var i = 1; i < lines.length; i++) {
     var p = lines[i].split(';');
-    if (p.length < 5) continue;
+    if (p.length < 3) continue;
     var lat = parseFloat((p[iLat] || '').replace(',', '.'));
     var lng = parseFloat((p[iLng] || '').replace(',', '.'));
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) continue;
     radars.push({
-      lat: lat,
-      lng: lng,
-      type: iType !== -1 ? p[iType] : 'Radar',
-      vitesse: iVitesse !== -1 ? p[iVitesse] : '',
-      route: iRoute !== -1 ? p[iRoute] : (iEmp !== -1 ? p[iEmp] : '')
+      id: iId !== -1 ? p[iId] : String(i),
+      lat: lat, lng: lng,
+      type: iType !== -1 && p[iType] ? p[iType] : 'Radar',
+      vitesse: iVit !== -1 ? p[iVit] : '',
+      date: iDate !== -1 ? p[iDate] : '',
+      route: iRoute !== -1 ? p[iRoute] : '',
+      emplacement: iEmp !== -1 ? p[iEmp] : '',
+      sens: iSens !== -1 ? p[iSens] : '',
+      commune: iCom !== -1 ? p[iCom] : ''
     });
   }
   return radars;
-}
-
-fetch('radars.csv')
-  .then(function(r){ return r.text(); })
-  .then(function(text){
-    var radars = parseCsv(text);
-    radars.forEach(function(r){
-      L.circleMarker([r.lat, r.lng], {
-        renderer: canvasRenderer,
-        radius: 6, color: '#d32f2f', fillColor: '#f44336', fillOpacity: 0.85
-      }).bindPopup('<b>' + r.type + '</b><br>' + (r.vitesse ? r.vitesse + ' km/h<br>' : '') + r.route)
-        .addTo(map);
-    });
-    document.getElementById('status').textContent = radars.length + ' radars affichés';
-  })
-  .catch(function(e){
-    document.getElementById('status').textContent = 'Erreur de chargement du CSV';
-  });
-
-if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(function(pos){
-    var me = [pos.coords.latitude, pos.coords.longitude];
-    L.circleMarker(me, { radius: 8, color: '#1976d2', fillColor: '#2196f3', fillOpacity: 0.9 })
-      .bindPopup('Votre position').addTo(map);
-    map.setView(me, 11);
-  }, function(){}, { enableHighAccuracy: true });
 }
 </script>
 </body>
