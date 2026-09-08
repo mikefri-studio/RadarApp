@@ -339,5 +339,191 @@ function parseCsv(text) {
   return radars;
 }
 </script>
+<script>
+// ==== ZOOM ADAPTATIF SELON LA VITESSE DE LA VOITURE ====
+(function () {
+  var dernierChangement = 0;
+  var pauseJusqua = 0;
+  function zoomPourVitesse(kmh) {
+    if (kmh < 5)   return 16;
+    if (kmh < 40)  return 15;
+    if (kmh < 70)  return 14;
+    if (kmh < 100) return 13;
+    return 12;
+  }
+  map.on('gesturestart', function () { pauseJusqua = Date.now() + 20000; });
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(function (pos) {
+      if (Date.now() < pauseJusqua) return;
+      var v = pos.coords.speed;
+      if (v == null) return;
+      var kmh = v * 3.6;
+      var z = zoomPourVitesse(kmh);
+      var now = Date.now();
+      if (Math.abs(map.getZoom() - z) >= 0.9 && now - dernierChangement > 4000) {
+        dernierChangement = now;
+        map.easeTo({ zoom: z, duration: 900 });
+      }
+    }, function () {}, { enableHighAccuracy: true });
+  }
+})();
+</script>
+<script>
+// ==== ALERTES VOCALES RADAR ====
+(function () {
+  var voixActive = true;
+  var annonces = {};
+  function parler(txt) {
+    if (!voixActive || !window.speechSynthesis) return;
+    try {
+      var u = new SpeechSynthesisUtterance(txt);
+      u.lang = 'fr-FR'; u.rate = 1.05;
+      var vs = speechSynthesis.getVoices();
+      for (var i = 0; i < vs.length; i++) {
+        if (vs[i].lang && vs[i].lang.indexOf('fr') === 0) { u.voice = vs[i]; break; }
+      }
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function distM(r, lat, lng) {
+    var R = 6371000, dLat = (r.lat - lat) * Math.PI / 180, dLng = (r.lng - lng) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat*Math.PI/180)*Math.cos(r.lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  function texteRadar(r) {
+    var t = (r.type || 'Radar').toLowerCase();
+    var v = r.vitesse || r.limite || r.limit || '';
+    return t + (v ? ', limité à ' + v : '');
+  }
+  // Deblocage audio au premier toucher
+  document.addEventListener('touchstart', function unlock() {
+    if (window.speechSynthesis) { var w = new SpeechSynthesisUtterance(' '); w.volume = 0; speechSynthesis.speak(w); }
+    document.removeEventListener('touchstart', unlock);
+  }, { once: true });
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(function (pos) {
+      var lat = pos.coords.latitude, lng = pos.coords.longitude;
+      var kmh = (pos.coords.speed != null && !isNaN(pos.coords.speed)) ? pos.coords.speed * 3.6 : (window.currentKmh || 0);
+      var seuil = Math.max(150, (kmh / 3.6) * 10);
+      var proche = null, dMin = 1e9;
+      for (var i = 0; i < allRadars.length; i++) {
+        var d = distM(allRadars[i], lat, lng);
+        if (d < dMin) { dMin = d; proche = allRadars[i]; }
+      }
+      if (!proche) return;
+      var etape = annonces[proche.id] || 0;
+      if (dMin > seuil + 200) { annonces[proche.id] = 0; etape = 0; }
+      if (etape === 0 && dMin <= seuil) {
+        annonces[proche.id] = 1;
+        parler(texteRadar(proche) + ' dans ' + (Math.round(dMin / 50) * 50) + ' mètres');
+      } else if (etape === 1 && dMin <= 100) {
+        annonces[proche.id] = 2;
+        parler('Radar dans 100 mètres');
+      } else if (etape === 2 && dMin > 300) {
+        annonces[proche.id] = 0;
+      }
+    }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
+  }
+  // Bouton activer/couper la voix
+  var btn = document.createElement('button');
+  btn.textContent = '🔊 Voix';
+  btn.style.cssText = 'position:fixed;right:10px;bottom:60px;z-index:9999;padding:8px 14px;border:none;border-radius:20px;background:#2196f3;color:#fff;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.4);';
+  btn.onclick = function () {
+    voixActive = !voixActive;
+    btn.textContent = voixActive ? '🔊 Voix' : '🔇 Voix';
+    btn.style.background = voixActive ? '#2196f3' : '#666';
+    if (!voixActive && window.speechSynthesis) speechSynthesis.cancel();
+  };
+  document.body.appendChild(btn);
+  if (window.speechSynthesis) { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = function () { speechSynthesis.getVoices(); }; }
+})();
+</script>
+<script>
+// ==== MENU RETRACTABLE V2 ====
+(function () {
+  function init() {
+    var panel = document.getElementById('panelBtns');
+    if (!panel) { setTimeout(init, 500); return; }
+    panel.style.bottom = '88px';
+    panel.style.transition = 'opacity .25s ease, transform .25s ease';
+    var tg = document.createElement('button');
+    tg.id = 'btnMenu';
+    tg.textContent = '✕';
+    tg.style.cssText = 'position:fixed;right:12px;bottom:36px;z-index:9999;width:44px;height:44px;border:1px solid rgba(255,255,255,.15);border-radius:50%;background:rgba(20,22,28,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font-size:17px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.4);';
+    document.body.appendChild(tg);
+    var deploye = true;
+    var pauseAutoJusqua = 0;
+    function setDeploye(d) {
+      deploye = d;
+      panel.style.opacity = d ? '1' : '0';
+      panel.style.transform = d ? 'translateY(0)' : 'translateY(20px)';
+      panel.style.pointerEvents = d ? 'auto' : 'none';
+      tg.textContent = d ? '✕' : '☰';
+    }
+    tg.addEventListener('click', function () {
+      pauseAutoJusqua = Date.now() + 90000;
+      setDeploye(!deploye);
+    });
+    var arretDepuis = null;
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(function (pos) {
+        if (Date.now() < pauseAutoJusqua) return;
+        var v = pos.coords.speed;
+        if (v == null || isNaN(v)) return;
+        var kmh = v * 3.6;
+        if (kmh >= 20) {
+          arretDepuis = null;
+          if (deploye) setDeploye(false);
+        } else if (kmh <= 5) {
+          if (arretDepuis === null) arretDepuis = Date.now();
+          else if (Date.now() - arretDepuis > 3000 && !deploye) setDeploye(true);
+        } else {
+          arretDepuis = null;
+        }
+      }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
+    }
+    setDeploye(true);
+  }
+  setTimeout(init, 600);
+})();
+</script>
+<script>
+// ==== PANNEAU BOUTONS V6 ====
+(function () {
+  function init() {
+    var old = document.getElementById('panelBtns');
+    if (old) old.remove();
+    var st = document.createElement('style');
+    st.textContent = '#panelBtns{position:fixed;right:12px;bottom:88px;z-index:9998;display:flex;flex-direction:column;gap:10px;align-items:stretch;background:rgba(20,22,28,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:10px;border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);}' +
+      '#panelBtns button{position:static!important;margin:0!important;min-width:120px;padding:10px 16px;border:none;border-radius:12px;font-size:14px;font-weight:600;letter-spacing:.3px;background:rgba(255,255,255,.10);color:#e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,.35);}' +
+      '#panelBtns button:active{transform:scale(.96);}' +
+      '#panelBtns button.rb-on{background:#2196f3;color:#fff;box-shadow:0 0 0 3px rgba(33,150,247,.55),0 2px 8px rgba(0,0,0,.35);}';
+    document.head.appendChild(st);
+    var panel = document.createElement('div');
+    panel.id = 'panelBtns';
+    document.body.appendChild(panel);
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button')).filter(function (b) {
+      return !b.closest('.maplibregl-ctrl');
+    });
+    btns.forEach(function (b) {
+      if (b.textContent.indexOf('Voix') >= 0) b.removeAttribute('style');
+      b.style.position = 'static';
+      b.style.margin = '0';
+      panel.appendChild(b);
+    });
+    setInterval(function () {
+      btns.forEach(function (b) {
+        b.style.removeProperty('background');
+        b.style.removeProperty('background-color');
+        var on;
+        if (b.textContent.indexOf('Voix') >= 0) on = b.textContent.indexOf('🔊') === 0;
+        else on = b.classList.contains('active');
+        b.classList.toggle('rb-on', on);
+      });
+    }, 400);
+  }
+  setTimeout(init, 400);
+})();
+</script>
 </body>
 </html>
