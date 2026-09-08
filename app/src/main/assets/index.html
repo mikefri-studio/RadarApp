@@ -555,6 +555,7 @@ function parseCsv(text) {
   var flash = document.createElement('div');
   flash.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:9996;pointer-events:none;opacity:0;box-shadow:inset 0 0 110px 35px rgba(255,30,30,.9);transition:opacity .18s ease;';
   document.body.appendChild(flash);
+  var s0 = document.getElementById('speed'); if (s0) s0.style.display = 'none';
   var num = document.getElementById('hudNum');
   var lim = document.getElementById('hudLim');
   var depasse = false;
