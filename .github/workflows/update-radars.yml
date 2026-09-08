@@ -16,25 +16,47 @@ jobs:
       - name: Telecharger CSV officiel + nettoyer
         run: |
           python3 << 'PY'
-          import urllib.request, json, csv, io, os
+          import urllib.request, json, csv, io
 
           api = 'https://www.data.gouv.fr/api/1/datasets/radars-automatiques/'
           with urllib.request.urlopen(api) as r:
               data = json.loads(r.read())
+
           csv_url = None
-          for res in data['resources']:
-              if res['format'] == 'csv' and 'radars' in res['title'].lower():
-                  csv_url = res['latest']
+          for res in data.get('resources', []):
+              fmt = (res.get('format') or '').lower()
+              title = (res.get('title') or '').lower()
+              if fmt == 'csv' and 'radar' in title:
+                  csv_url = res.get('latest') or res.get('url')
                   break
           if not csv_url:
-              print('Aucun CSV trouve')
+              for res in data.get('resources', []):
+                  if (res.get('format') or '').lower() == 'csv':
+                      csv_url = res.get('latest') or res.get('url')
+                      break
+          if not csv_url:
+              print('Aucune ressource CSV trouvee')
               exit(1)
           print(f'Telecharge : {csv_url}')
 
-          with urllib.request.urlopen(csv_url) as r:
-              raw = r.read().decode('utf-8-sig')
-          reader = csv.DictReader(io.StringIO(raw), delimiter=';')
-          fieldnames = reader.fieldnames
+          raw = None
+          for enc in ('utf-8-sig', 'latin-1', 'cp1252'):
+              try:
+                  raw = urllib.request.urlopen(csv_url).read().decode(enc)
+                  print(f'Encodage OK : {enc}')
+                  break
+              except Exception:
+                  continue
+          if not raw:
+              print('Telechargement impossible')
+              exit(1)
+
+          first = raw.splitlines()[0] if raw else ''
+          delim = ';' if first.count(';') >= first.count(',') else ','
+          print(f'Separateur detecte : {delim!r} | En-tete : {first[:120]}')
+
+          reader = csv.DictReader(io.StringIO(raw), delimiter=delim)
+          fieldnames = reader.fieldnames or []
 
           def find(names):
               for n in names:
@@ -43,35 +65,45 @@ jobs:
                           return f
               return None
 
-          col_id    = find(['numero', 'num', 'id'])
-          col_type  = find(['type'])
-          col_date  = find(['mise en service', 'date'])
-          col_vit   = find(['vma', 'vitesse'])
-          col_lat   = find(['latitude', 'lat'])
-          col_lng   = find(['longitude', 'lng', 'long'])
+          col_id   = find(['numero', 'num', 'id'])
+          col_type = find(['type'])
+          col_date = find(['mise en service', 'date'])
+          col_vit  = find(['vma', 'vitesse'])
+          col_lat  = find(['latitude', 'lat'])
+          col_lng  = find(['longitude', 'lng', 'long'])
+          print(f'Colonnes : id={col_id} type={col_type} vit={col_vit} lat={col_lat} lng={col_lng}')
 
-          out_path = 'app/src/main/assets/radars.csv'
-          header = 'Numero de radar;Type de radar;Date de mise en service;VMA ;Latitude; Longitude\n'
           lignes = []
           for row in reader:
               try:
                   lat = (row.get(col_lat) or '').replace(',', '.').strip()
                   lng = (row.get(col_lng) or '').replace(',', '.').strip()
-                  if not lat or not lng: continue
+                  if not lat or not lng:
+                      continue
                   fl, flo = float(lat), float(lng)
-                  if fl == 0 and flo == 0: continue
-                  id_   = (row.get(col_id)  or '').strip()
+                  if fl == 0 and flo == 0:
+                      continue
+                  id_   = (row.get(col_id) or '').strip()
                   type_ = (row.get(col_type) or '').strip()
                   date_ = (row.get(col_date) or '').strip()[:16]
-                  vit   = (row.get(col_vit)  or '').strip()
+                  vit   = (row.get(col_vit) or '').strip()
                   lignes.append(f'{id_};{type_};{date_};{vit};{lat};{lng}')
               except Exception:
                   continue
 
+          # GARDE-FOU : jamais ecraser avec un fichier quasi vide
+          if len(lignes) < 100:
+              print(f'ERREUR : seulement {len(lignes)} radars detectes -> fichier NON remplace')
+              print('Premieres lignes brutes :')
+              print('\n'.join(raw.splitlines()[:5]))
+              exit(1)
+
+          out_path = 'app/src/main/assets/radars.csv'
+          header = 'Numero de radar;Type de radar;Date de mise en service;VMA ;Latitude; Longitude\n'
           with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
               f.write(header)
               f.write('\n'.join(lignes))
-          print(f'OK : {len(lignes)} radars')
+          print(f'OK : {len(lignes)} radars ecrits')
           PY
 
       - name: Commit et push si changement
