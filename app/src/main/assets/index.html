@@ -611,43 +611,39 @@ function parseCsv(text) {
 })();
 </script>
 <script>
-// ==== TRIO COMPAGNON : RADARS AUTO-UPDATE ====
+// ==== RADARS : MISE A JOUR A CHAQUE OUVERTURE ====
 (function () {
-  var URL_CSV = 'https://raw.githubusercontent.com/mikefri-studio/RadarApp/master/app/src/main/assets/radars.csv';
-  var KEY = 'radarsCsvCache', KEY_DATE = 'radarsCsvDate';
+  var URL_DIST = 'https://raw.githubusercontent.com/mikefri-studio/RadarApp/master/app/src/main/assets/radars.csv';
+  var KEY = 'radarsCsvCache';
   function appliquer(csv) {
     try {
       var r = parseCsv(csv);
       if (r && r.length > 0) {
+        var avant = allRadars ? allRadars.length : 0;
         allRadars = r;
         byId = {};
-        allRadars.forEach(function (x) { byId[x.id] = x; });
+        r.forEach(function (x) { byId[x.id] = x; });
         renderRadars();
+        if (avant !== r.length) console.log('[radars] maj : ' + avant + ' -> ' + r.length);
         return true;
       }
     } catch (e) {}
     return false;
   }
+  // Level 2 : cache localStorage (instantane)
   try {
-    var cache = localStorage.getItem(KEY);
-    if (cache) appliquer(cache);
+    var c = localStorage.getItem(KEY);
+    if (c) appliquer(c);
   } catch (e) {}
-  var last = 0;
-  try { last = parseInt(localStorage.getItem(KEY_DATE) || '0', 10); } catch (e) {}
-  if (Date.now() - last > 24 * 3600 * 1000) {
-    fetch(URL_CSV, { cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.text() : ''; })
-      .then(function (txt) {
-        if (txt && txt.indexOf(',') > 0 && appliquer(txt)) {
-          try {
-            localStorage.setItem(KEY, txt);
-            localStorage.setItem(KEY_DATE, String(Date.now()));
-          } catch (e) {}
-          console.log('[radars] maj distante OK : ' + allRadars.length + ' radars');
-        }
-      })
-      .catch(function () { console.log('[radars] serveur injoignable, version locale conservee'); });
-  }
+  // Level 1 : fetch GitHub (fichier nettoye par le workflow)
+  fetch(URL_DIST, { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.text() : ''; })
+    .then(function (txt) {
+      if (txt && txt.indexOf(';') > 0 && appliquer(txt)) {
+        try { localStorage.setItem(KEY, txt); } catch (e) {}
+      }
+    })
+    .catch(function () { console.log('[radars] hors-ligne : cache/version embarquee'); });
 })();
 </script>
 </body>
