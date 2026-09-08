@@ -1,0 +1,87 @@
+name: Mise a jour automatique des radars
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Telecharger CSV officiel + nettoyer
+        run: |
+          python3 << 'PY'
+          import urllib.request, json, csv, io, os
+
+          api = 'https://www.data.gouv.fr/api/1/datasets/radars-automatiques/'
+          with urllib.request.urlopen(api) as r:
+              data = json.loads(r.read())
+          csv_url = None
+          for res in data['resources']:
+              if res['format'] == 'csv' and 'radars' in res['title'].lower():
+                  csv_url = res['latest']
+                  break
+          if not csv_url:
+              print('Aucun CSV trouve')
+              exit(1)
+          print(f'Telecharge : {csv_url}')
+
+          with urllib.request.urlopen(csv_url) as r:
+              raw = r.read().decode('utf-8-sig')
+          reader = csv.DictReader(io.StringIO(raw), delimiter=';')
+          fieldnames = reader.fieldnames
+
+          def find(names):
+              for n in names:
+                  for f in fieldnames:
+                      if f and n.lower() in f.lower():
+                          return f
+              return None
+
+          col_id    = find(['numero', 'num', 'id'])
+          col_type  = find(['type'])
+          col_date  = find(['mise en service', 'date'])
+          col_vit   = find(['vma', 'vitesse'])
+          col_lat   = find(['latitude', 'lat'])
+          col_lng   = find(['longitude', 'lng', 'long'])
+
+          out_path = 'app/src/main/assets/radars.csv'
+          header = 'Numero de radar;Type de radar;Date de mise en service;VMA ;Latitude; Longitude\n'
+          lignes = []
+          for row in reader:
+              try:
+                  lat = (row.get(col_lat) or '').replace(',', '.').strip()
+                  lng = (row.get(col_lng) or '').replace(',', '.').strip()
+                  if not lat or not lng: continue
+                  fl, flo = float(lat), float(lng)
+                  if fl == 0 and flo == 0: continue
+                  id_   = (row.get(col_id)  or '').strip()
+                  type_ = (row.get(col_type) or '').strip()
+                  date_ = (row.get(col_date) or '').strip()[:16]
+                  vit   = (row.get(col_vit)  or '').strip()
+                  lignes.append(f'{id_};{type_};{date_};{vit};{lat};{lng}')
+              except Exception:
+                  continue
+
+          with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
+              f.write(header)
+              f.write('\n'.join(lignes))
+          print(f'OK : {len(lignes)} radars')
+          PY
+
+      - name: Commit et push si changement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/radars.csv
+          if git diff --cached --quiet; then
+            echo "Aucun changement"
+          else
+            git commit -m "chore: maj auto radars data.gouv.fr"
+            git push
+          fi
