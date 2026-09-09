@@ -676,7 +676,7 @@ function parseCsv(text) {
   function orange() {
     if (orangeFait || !map.getSource || !map.getSource('radars')) return;
     var cc = map.getPaintProperty('radars', 'circle-color') || '#ff5252';
-    map.setPaintProperty('radars', 'circle-color', ['case', ['==', ['slice', ['to-string', ['get', 'id']], 0, 6], 'perso-'], '#ff9800', cc]);
+    // (couleur geree par le module icones)
     orangeFait = true;
   }
   function mergePerso() {
@@ -815,9 +815,9 @@ function parseCsv(text) {
       map.addImage('ic-troncon', makeIcon('⏱️'), { pixelRatio: 2 });
       map.addImage('ic-pn', makeIcon('🚂'), { pixelRatio: 2 });
     }
-    map.setPaintProperty('radars', 'circle-color', ['case', ['==', ['slice', ['to-string', ['get', 'id']], 0, 6], 'perso-'], '#ff9800', 'rgba(0,0,0,0)']);
+    map.setPaintProperty('radars', 'circle-color', 'rgba(0,0,0,0)');
     map.setPaintProperty('radars', 'circle-opacity', 1);
-    map.setPaintProperty('radars', 'circle-radius', 0);
+    map.setPaintProperty('radars', 'circle-radius', 12);
     map.addLayer({
       id: 'radars-icons',
       type: 'symbol',
