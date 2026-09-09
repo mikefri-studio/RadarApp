@@ -13,10 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Telecharger CSV officiels + fusionner + dedoublonner
+      - name: Telecharger CSV officiel recent + dedoublonner
         run: |
           python3 << 'PY'
-          import urllib.request, json, csv, io, os
+          import urllib.request, json, csv, io, os, math
 
           def get_json(url):
               with urllib.request.urlopen(url) as r:
@@ -38,118 +38,118 @@ jobs:
           def find(fields, names):
               for n in names:
                   for f in fields:
-                      if f and n in f.lower():
+                      if f and n.lower() in f.lower():
                           return f
               return None
 
           def clean(v):
               return (v or '').strip()
 
+          def dist_m(a, b):
+              lat1, lng1 = a
+              lat2, lng2 = b
+              R = 6371000
+              dlat = math.radians(lat2 - lat1)
+              dlng = math.radians(lng2 - lng1)
+              x = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng/2)**2
+              return R * 2 * math.atan2(math.sqrt(x), math.sqrt(1-x))
+
           out_path = 'app/src/main/assets/radars.csv'
 
-          old_vma = {}
-          if os.path.exists(out_path):
-              for line in open(out_path, encoding='utf-8').read().splitlines()[1:]:
-                  p = line.split(';')
-                  if len(p) >= 4 and clean(p[3]):
-                      old_vma[clean(p[0])] = clean(p[3])
-          print(f'VMA connues dans le fichier actuel : {len(old_vma)}')
+          # Source officielle récente avec VMA
+          data = get_json('https://www.data.gouv.fr/api/1/datasets/liste-des-radars-fixes-en-france/')
+          csvs = [r for r in data.get('resources', []) if (r.get('format') or '').lower() == 'csv']
+          csvs.sort(key=lambda r: r.get('created_at') or '', reverse=True)
 
-          radars = {}
-          seen = {}
+          if not csvs:
+              print('Aucun CSV officiel recent trouve')
+              exit(1)
 
-          def ajouter(rid, typ, date, vit, fl, flo):
-              pk = f'{round(fl, 4)},{round(flo, 4)}'
-              if pk in seen:
-                  anc = radars[seen[pk]]
-                  if not anc['vit'] and vit:
-                      anc['vit'] = vit
-                  return False
-              seen[pk] = rid
-              radars[rid] = {'type': typ, 'date': date, 'vit': vit, 'lat': str(fl), 'lng': str(flo)}
-              return True
+          url = csvs[0]['url']
+          print(f'Source officielle recente : {url}')
 
-          # Source A : liste recente (dec 2025) avec VMA
-          da = get_json('https://www.data.gouv.fr/api/1/datasets/liste-des-radars-fixes-en-france/')
-          csvsA = [r for r in da.get('resources', []) if (r.get('format') or '').lower() == 'csv']
-          csvsA.sort(key=lambda r: r.get('created_at') or '', reverse=True)
-          urlA = csvsA[0]['url'] if csvsA else None
-          print(f'Source A : {urlA}')
-          if urlA:
-              rawA = get_raw(urlA)
-              if rawA:
-                  readerA, headA = sniff_reader(rawA)
-                  fa = readerA.fieldnames or []
-                  print(f'En-tete A : {headA[:150]}')
-                  c = {'id': find(fa, ['identifiant', 'numero', 'id']),
-                       'type': find(fa, ['type']),
-                       'date': find(fa, ['mise en service', 'mise_en_service', 'date']),
-                       'vit': find(fa, ['vma', 'vitesse']),
-                       'lat': find(fa, ['latitude', 'lat']),
-                       'lng': find(fa, ['longitude', 'lng', 'long'])}
-                  for row in readerA:
-                      try:
-                          lat = clean(row.get(c['lat'])).replace(',', '.')
-                          lng = clean(row.get(c['lng'])).replace(',', '.')
-                          if not lat or not lng: continue
-                          fl, flo = float(lat), float(lng)
-                          if fl == 0 and flo == 0: continue
-                          rid = clean(row.get(c['id'])) or str(len(radars))
-                          ajouter(rid, clean(row.get(c['type'])) or 'Radar fixe',
-                                  clean(row.get(c['date']))[:16], clean(row.get(c['vit'])), fl, flo)
-                      except Exception:
-                          continue
-          print(f'Apres source A : {len(radars)} radars uniques')
+          raw = get_raw(url)
+          if not raw:
+              print('Impossible de telecharger le CSV')
+              exit(1)
 
-          # Source B : fichier 2018 (feu rouge, troncon, etc.)
-          db = get_json('https://www.data.gouv.fr/api/1/datasets/radars-automatiques/')
-          csvsB = [r for r in db.get('resources', []) if (r.get('format') or '').lower() == 'csv']
-          urlB = csvsB[0]['url'] if csvsB else None
-          print(f'Source B : {urlB}')
-          if urlB:
-              rawB = get_raw(urlB)
-              if rawB:
-                  readerB, headB = sniff_reader(rawB)
-                  fb = readerB.fieldnames or []
-                  cb = {'id': find(fb, ['identifiant', 'numero', 'id']),
-                        'type': find(fb, ['type']),
-                        'date': find(fb, ['installation', 'mise en service', 'date']),
-                        'vit': find(fb, ['vehicules_legers', 'vma', 'vitesse']),
-                        'lat': find(fb, ['latitude', 'lat']),
-                        'lng': find(fb, ['longitude', 'lng', 'long'])}
-                  ajout = 0
-                  for row in readerB:
-                      try:
-                          rid = clean(row.get(cb['id']))
-                          if not rid or rid in radars: continue
-                          lat = clean(row.get(cb['lat'])).replace(',', '.')
-                          lng = clean(row.get(cb['lng'])).replace(',', '.')
-                          if not lat or not lng: continue
-                          fl, flo = float(lat), float(lng)
-                          if fl == 0 and flo == 0: continue
-                          if ajouter(rid, clean(row.get(cb['type'])) or 'Radar',
-                                     clean(row.get(cb['date']))[:16], clean(row.get(cb['vit'])), fl, flo):
-                              ajout += 1
-                      except Exception:
-                          continue
-                  print(f'Source B : +{ajout} radars uniques')
+          reader, head = sniff_reader(raw)
+          fields = reader.fieldnames or []
+          print(f'En-tete : {head[:200]}')
 
-          for rid, r in radars.items():
-              if not r['vit']:
-                  r['vit'] = old_vma.get(rid, '')
+          col_id   = find(fields, ['identifiant', 'numero', 'numéro', 'id'])
+          col_type = find(fields, ['type'])
+          col_date = find(fields, ['mise en service', 'mise_en_service', 'date'])
+          col_vma  = find(fields, ['vma', 'vitesse'])
+          col_lat  = find(fields, ['latitude', 'lat'])
+          col_lng  = find(fields, ['longitude', 'lng', 'long'])
+
+          print(f'Colonnes : id={col_id} type={col_type} date={col_date} vma={col_vma} lat={col_lat} lng={col_lng}')
+
+          radars = []
+
+          for row in reader:
+              try:
+                  lat = clean(row.get(col_lat)).replace(',', '.')
+                  lng = clean(row.get(col_lng)).replace(',', '.')
+                  if not lat or not lng:
+                      continue
+
+                  fl = float(lat)
+                  flo = float(lng)
+
+                  if fl == 0 and flo == 0:
+                      continue
+
+                  rid = clean(row.get(col_id)) or str(len(radars) + 1)
+                  typ = clean(row.get(col_type)) or 'Radar'
+                  dat = clean(row.get(col_date))[:16]
+                  vma = clean(row.get(col_vma))
+
+                  nouveau = {
+                      'id': rid,
+                      'type': typ,
+                      'date': dat,
+                      'vma': vma,
+                      'lat': fl,
+                      'lng': flo
+                  }
+
+                  # Dédoublonnage spatial : si un radar existe déjà à moins de 60 m, on fusionne
+                  doublon = None
+                  for r in radars:
+                      if dist_m((r['lat'], r['lng']), (fl, flo)) < 60:
+                          doublon = r
+                          break
+
+                  if doublon:
+                      # On garde la VMA si l’un des deux l’a
+                      if not doublon['vma'] and vma:
+                          doublon['vma'] = vma
+                      # On garde le type le plus parlant
+                      if doublon['type'] == 'Radar' and typ:
+                          doublon['type'] = typ
+                  else:
+                      radars.append(nouveau)
+
+              except Exception:
+                  continue
 
           if len(radars) < 100:
-              print('ERREUR : trop peu de radars -> fichier NON remplace')
+              print(f'ERREUR : seulement {len(radars)} radars detectes -> fichier NON remplace')
               exit(1)
 
           header = 'Numero de radar;Type de radar;Date de mise en service;VMA ;Latitude; Longitude\n'
-          lignes = [f"{rid};{r['type']};{r['date']};{r['vit']};{r['lat']};{r['lng']}"
-                    for rid, r in sorted(radars.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0)]
+          lignes = []
+          for r in radars:
+              lignes.append(f"{r['id']};{r['type']};{r['date']};{r['vma']};{r['lat']};{r['lng']}")
+
           with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
               f.write(header)
               f.write('\n'.join(lignes))
-          avec_vma = sum(1 for r in radars.values() if r['vit'])
-          print(f'OK : {len(lignes)} radars uniques ecrits, dont {avec_vma} avec VMA')
+
+          avec_vma = sum(1 for r in radars if r['vma'])
+          print(f'OK : {len(radars)} radars uniques ecrits, dont {avec_vma} avec VMA')
           PY
 
       - name: Commit et push si changement
@@ -160,6 +160,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Aucun changement"
           else
-            git commit -m "chore: maj auto radars data.gouv.fr (dedoublonne par position)"
+            git commit -m "chore: maj auto radars officiels dedoublonnes"
             git push
           fi
