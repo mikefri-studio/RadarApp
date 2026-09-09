@@ -844,5 +844,83 @@ function parseCsv(text) {
   setTimeout(setup, 600);
 })();
 </script>
+<script>
+// ==== VERIFICATION RADARS APRES PASSAGE ====
+(function () {
+  var KEY_NOIRS = 'radarsNoirs';
+  var noirs = [];
+  try { noirs = JSON.parse(localStorage.getItem(KEY_NOIRS) || '[]'); } catch (e) { noirs = []; }
+  var demandes = {};
+  var candidat = null;
+  var phase = '';
+  var dernierPopup = 0;
+
+  var box = document.createElement('div');
+  box.id = 'verifBox';
+  box.style.cssText = 'position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:10001;display:none;background:rgba(20,22,28,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:14px;color:#fff;min-width:250px;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.6);text-align:center;';
+  box.innerHTML = '<div id="verifTxt" style="font-size:14px;margin-bottom:10px;"></div>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button id="verifOui" style="flex:1;padding:12px;border:none;border-radius:12px;background:#2e7d32;color:#fff;font-weight:700;">✅ Toujours là</button>' +
+    '<button id="verifNon" style="flex:1;padding:12px;border:none;border-radius:12px;background:#c62828;color:#fff;font-weight:700;">❌ Supprimé</button></div>';
+  box.addEventListener('click', function (e) {
+    if (e.target.id === 'verifOui') { box.style.display = 'none'; }
+    if (e.target.id === 'verifNon' && candidat) {
+      noirs.push(String(candidat.id));
+      try { localStorage.setItem(KEY_NOIRS, JSON.stringify(noirs)); } catch (e2) {}
+      appliquerNoirs();
+      box.style.display = 'none';
+      try { var u = new SpeechSynthesisUtterance('Radar supprime'); u.lang = 'fr-FR'; speechSynthesis.speak(u); } catch (e3) {}
+    }
+  });
+
+  function appliquerNoirs() {
+    if (!window.allRadars) return;
+    var avant = allRadars.length;
+    allRadars = allRadars.filter(function (r) { return noirs.indexOf(String(r.id)) === -1; });
+    if (allRadars.length !== avant) {
+      byId = {};
+      allRadars.forEach(function (r) { byId[r.id] = r; });
+      renderRadars();
+    }
+  }
+
+  function distM(r, lat, lng) {
+    var R = 6371000, dLat = (r.lat - lat) * Math.PI / 180, dLng = (r.lng - lng) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat*Math.PI/180)*Math.cos(r.lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  if (navigator.geolocation) navigator.geolocation.watchPosition(function (pos) {
+    var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    var proche = null, dMin = 1e9;
+    for (var i = 0; i < allRadars.length; i++) {
+      var r = allRadars[i];
+      if (String(r.id).indexOf('perso-') === 0) continue;
+      var d = distM(r, lat, lng);
+      if (d < dMin) { dMin = d; proche = r; }
+    }
+    if (!proche) return;
+    if (dMin < 50) { candidat = proche; phase = 'approche'; }
+    else if (phase === 'approche' && candidat && dMin > 90) {
+      phase = '';
+      var idS = String(candidat.id);
+      if (!demandes[idS] && noirs.indexOf(idS) === -1 && Date.now() - dernierPopup > 30000) {
+        demandes[idS] = 1;
+        dernierPopup = Date.now();
+        var r2 = candidat;
+        document.getElementById('verifTxt').innerHTML = '📷 Radar passé' + (r2.vitesse ? ' (limité à ' + r2.vitesse + ')' : '') + '.<br>Encore présent ?';
+        if (!box.parentNode) document.body.appendChild(box);
+        box.style.display = 'block';
+        setTimeout(function () { if (box.style.display === 'block') box.style.display = 'none'; }, 20000);
+      }
+      candidat = null;
+    }
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
+
+  function essai() { if (window.mapReady && window.allRadars) { appliquerNoirs(); return true; } return false; }
+  if (!essai()) { var iv = setInterval(function () { if (essai()) clearInterval(iv); }, 500); }
+  setInterval(appliquerNoirs, 2000);
+})();
+</script>
 </body>
 </html>
