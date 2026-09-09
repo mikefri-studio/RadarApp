@@ -992,19 +992,25 @@ function parseCsv(text) {
   }
   function restoreCustomLayers() {
     if (!layersBackup) return;
+    // Recree la source radars
+    if (!map.getSource('radars') && window.allRadars) {
+      try {
+        map.addSource('radars', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: allRadars.map(function (r) {
+            return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: r };
+          })}
+        });
+      } catch (e) { console.log('[theme] erreur addSource radars', e); }
+    }
+    // Restaure les couches
     var cur = map.getStyle();
     layersBackup.forEach(function (layer) {
       if (!cur.layers.some(function (l) { return l.id === layer.id; })) {
-        try { map.addLayer(layer); } catch (e) { console.log('restore', layer.id, e); }
+        try { map.addLayer(layer); } catch (e) { console.log('[theme] erreur addLayer', layer.id, e); }
       }
     });
-    var src = map.getSource('radars');
-    if (src && window.allRadars) {
-      try { src.setData({ type: 'FeatureCollection', features: allRadars.map(function (r) {
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: r };
-      })}); } catch (e) {}
-    }
-    // Re-couleurs les cercles persos + invisibles autres
+    // Re-couleurs les cercles
     try {
       map.setPaintProperty('radars', 'circle-color', 'rgba(0,0,0,0)');
       map.setPaintProperty('radars', 'circle-radius', 12);
