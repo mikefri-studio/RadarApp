@@ -714,8 +714,8 @@ function parseCsv(text) {
   });
   function ouvrirForm(pos) {
     pendingPos = pos || null;
-    document.getElementById('declTitre').textContent = pendingPos ? '📍 Radar au point choisi sur la carte' : '📍 Radar à ma position';
     if (!form.parentNode) document.body.appendChild(form);
+    document.getElementById('declTitre').textContent = pendingPos ? '📍 Radar au point choisi sur la carte' : '📍 Radar à ma position';
     form.style.display = 'block';
   }
   var btnAdd = document.createElement('button');
