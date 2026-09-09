@@ -658,11 +658,12 @@ function parseCsv(text) {
 })();
 </script>
 <script>
-// ==== RADARS PERSO : DECLARATION ====
+// ==== RADARS PERSO : DECLARATION V2 ====
 (function () {
   var KEY = 'radarsPerso';
   var perso = [];
   var lastPos = null;
+  var pendingPos = null;
   var modeSuppr = false;
   var orangeFait = false;
   try { perso = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { perso = []; }
@@ -686,11 +687,10 @@ function parseCsv(text) {
     renderRadars();
     orange();
   }
-  // Formulaire (cree maintenant, affiche a la demande)
   var form = document.createElement('div');
   form.id = 'declForm';
   form.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10000;display:none;background:rgba(20,22,28,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:16px;color:#fff;min-width:230px;box-shadow:0 10px 40px rgba(0,0,0,.6);';
-  form.innerHTML = '<div style="font-weight:700;margin-bottom:10px;">📍 Déclarer un radar</div>' +
+  form.innerHTML = '<div id="declTitre" style="font-weight:700;margin-bottom:10px;">📍 Déclarer un radar</div>' +
     '<select id="declType" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:8px;background:#2a2d36;color:#fff;">' +
     '<option>Radar fixe</option><option>Radar mobile</option><option>Feu rouge</option><option>Radar tronçon</option><option>Passage à niveau</option></select>' +
     '<select id="declVit" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:12px;background:#2a2d36;color:#fff;">' +
@@ -700,8 +700,10 @@ function parseCsv(text) {
     '<button id="declNo" style="flex:1;padding:10px;border:none;border-radius:10px;background:#444;color:#fff;">Annuler</button></div>';
   form.addEventListener('click', function (e) {
     if (e.target.id === 'declNo') { form.style.display = 'none'; return; }
-    if (e.target.id === 'declOk' && lastPos) {
-      perso.push({ id: 'perso-' + Date.now(), lat: lastPos.lat, lng: lastPos.lng,
+    if (e.target.id === 'declOk') {
+      var pos = pendingPos || lastPos;
+      if (!pos) { alert('Position GPS non disponible'); return; }
+      perso.push({ id: 'perso-' + Date.now(), lat: pos.lat, lng: pos.lng,
         type: document.getElementById('declType').value,
         vitesse: document.getElementById('declVit').value,
         date: '', route: '', emplacement: '', sens: '', commune: '' });
@@ -710,15 +712,16 @@ function parseCsv(text) {
       try { var u = new SpeechSynthesisUtterance('Radar déclaré'); u.lang = 'fr-FR'; speechSynthesis.speak(u); } catch (e2) {}
     }
   });
-  // Boutons (integres au panneau automatiquement)
+  function ouvrirForm(pos) {
+    pendingPos = pos || null;
+    document.getElementById('declTitre').textContent = pendingPos ? '📍 Radar au point choisi sur la carte' : '📍 Radar à ma position';
+    if (!form.parentNode) document.body.appendChild(form);
+    form.style.display = 'block';
+  }
   var btnAdd = document.createElement('button');
   btnAdd.id = 'btnDecl';
   btnAdd.textContent = '➕';
-  btnAdd.onclick = function () {
-    if (!lastPos) { alert('Position GPS non disponible'); return; }
-    if (!form.parentNode) document.body.appendChild(form);
-    form.style.display = 'block';
-  };
+  btnAdd.onclick = function () { ouvrirForm(null); };
   document.body.appendChild(btnAdd);
   var btnDel = document.createElement('button');
   btnDel.id = 'btnDeclSuppr';
@@ -728,11 +731,27 @@ function parseCsv(text) {
     btnDel.classList.toggle('active', modeSuppr);
   };
   document.body.appendChild(btnDel);
-  // GPS
+  // Appui long sur la carte = declarer a cet endroit
+  var t0 = 0, p0 = null;
+  var cv = map.getCanvas();
+  cv.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 1) { t0 = Date.now(); p0 = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+  }, { passive: true });
+  cv.addEventListener('touchend', function (e) {
+    if (!t0 || !p0) return;
+    var dt = Date.now() - t0;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - p0.x, dy = t.clientY - p0.y;
+    if (dt >= 500 && Math.sqrt(dx * dx + dy * dy) < 12) {
+      var rect = cv.getBoundingClientRect();
+      var ll = map.unproject(new maplibregl.Point(t.clientX - rect.left, t.clientY - rect.top));
+      ouvrirForm({ lat: ll.lat, lng: ll.lng });
+    }
+    t0 = 0; p0 = null;
+  }, { passive: true });
   if (navigator.geolocation) navigator.geolocation.watchPosition(function (p) {
     lastPos = { lat: p.coords.latitude, lng: p.coords.longitude };
   }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
-  // Suppression : tap sur un radar orange en mode suppression
   map.on('click', function (e) {
     if (!modeSuppr) return;
     var idx = -1, best = 60;
@@ -746,7 +765,6 @@ function parseCsv(text) {
       if (window.hideRadarPopup) hideRadarPopup();
     }
   });
-  // Merge au demarrage + apres chaque maj officielle
   function essaiMerge() {
     if (window.mapReady && window.allRadars) { mergePerso(); return true; }
     return false;
