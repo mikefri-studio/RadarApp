@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Telecharger CSV officiels + fusionner
+      - name: Telecharger CSV officiels + fusionner + dedoublonner
         run: |
           python3 << 'PY'
           import urllib.request, json, csv, io, os
@@ -56,6 +56,18 @@ jobs:
           print(f'VMA connues dans le fichier actuel : {len(old_vma)}')
 
           radars = {}
+          seen = {}
+
+          def ajouter(rid, typ, date, vit, fl, flo):
+              pk = f'{round(fl, 4)},{round(flo, 4)}'
+              if pk in seen:
+                  anc = radars[seen[pk]]
+                  if not anc['vit'] and vit:
+                      anc['vit'] = vit
+                  return False
+              seen[pk] = rid
+              radars[rid] = {'type': typ, 'date': date, 'vit': vit, 'lat': str(fl), 'lng': str(flo)}
+              return True
 
           # Source A : liste recente (dec 2025) avec VMA
           da = get_json('https://www.data.gouv.fr/api/1/datasets/liste-des-radars-fixes-en-france/')
@@ -75,7 +87,6 @@ jobs:
                        'vit': find(fa, ['vma', 'vitesse']),
                        'lat': find(fa, ['latitude', 'lat']),
                        'lng': find(fa, ['longitude', 'lng', 'long'])}
-                  print(f'Colonnes A : {c}')
                   for row in readerA:
                       try:
                           lat = clean(row.get(c['lat'])).replace(',', '.')
@@ -84,13 +95,11 @@ jobs:
                           fl, flo = float(lat), float(lng)
                           if fl == 0 and flo == 0: continue
                           rid = clean(row.get(c['id'])) or str(len(radars))
-                          radars[rid] = {'type': clean(row.get(c['type'])) or 'Radar fixe',
-                                         'date': clean(row.get(c['date']))[:16],
-                                         'vit': clean(row.get(c['vit'])),
-                                         'lat': lat, 'lng': lng}
+                          ajouter(rid, clean(row.get(c['type'])) or 'Radar fixe',
+                                  clean(row.get(c['date']))[:16], clean(row.get(c['vit'])), fl, flo)
                       except Exception:
                           continue
-          print(f'Apres source A : {len(radars)} radars')
+          print(f'Apres source A : {len(radars)} radars uniques')
 
           # Source B : fichier 2018 (feu rouge, troncon, etc.)
           db = get_json('https://www.data.gouv.fr/api/1/datasets/radars-automatiques/')
@@ -118,14 +127,12 @@ jobs:
                           if not lat or not lng: continue
                           fl, flo = float(lat), float(lng)
                           if fl == 0 and flo == 0: continue
-                          radars[rid] = {'type': clean(row.get(cb['type'])) or 'Radar',
-                                         'date': clean(row.get(cb['date']))[:16],
-                                         'vit': clean(row.get(cb['vit'])),
-                                         'lat': lat, 'lng': lng}
-                          ajout += 1
+                          if ajouter(rid, clean(row.get(cb['type'])) or 'Radar',
+                                     clean(row.get(cb['date']))[:16], clean(row.get(cb['vit'])), fl, flo):
+                              ajout += 1
                       except Exception:
                           continue
-                  print(f'Source B : +{ajout} radars')
+                  print(f'Source B : +{ajout} radars uniques')
 
           for rid, r in radars.items():
               if not r['vit']:
@@ -142,7 +149,7 @@ jobs:
               f.write(header)
               f.write('\n'.join(lignes))
           avec_vma = sum(1 for r in radars.values() if r['vit'])
-          print(f'OK : {len(lignes)} radars ecrits, dont {avec_vma} avec VMA')
+          print(f'OK : {len(lignes)} radars uniques ecrits, dont {avec_vma} avec VMA')
           PY
 
       - name: Commit et push si changement
@@ -153,6 +160,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Aucun changement"
           else
-            git commit -m "chore: maj auto radars data.gouv.fr (fusion 2025 + 2018 + VMA)"
+            git commit -m "chore: maj auto radars data.gouv.fr (dedoublonne par position)"
             git push
           fi
