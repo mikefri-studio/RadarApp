@@ -151,8 +151,8 @@ function translateType(code) {
   code = code.trim().toUpperCase();
   var m = { 'ET':'Radar fixe', 'ETF':'Radar fixe', 'ETD':'Discriminant VL/PL', 'ETC':'Chantier',
             'ETCD':'Chantier discriminant', 'ETE':'Mobile embarqué', 'ETFR':'Feu rouge',
-            'ETT':'Tronçon (vitesse moy.)', 'ETM':'Mobile', 'ETP':'Passage à niveau',
-            'ETPN':'Passage à niveau', 'ETVM':'Vitesse moyenne', 'ETU':'Radar urbain' };
+            'ETT':'Radar tourelle (fixe)', 'ETM':'Mobile', 'ETP':'Passage à niveau',
+            'ETPN':'Passage à niveau', 'ETVM':'Tronçon (vitesse moyenne)', 'ETU':'Radar urbain', 'ETFR':'Feu rouge', 'ETF':'Radar fixe', 'ETD':'Radar fixe (discriminant)' };
   if (m[code]) return m[code];
   if (code.indexOf('FR') !== -1) return 'Feu rouge';
   if (code.indexOf('TT') !== -1) return 'Tronçon';
