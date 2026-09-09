@@ -1,8 +1,12 @@
-package com.mikefri58.radarzen
+﻿package com.mikefri58.radarzen
 
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.GeolocationPermissions
@@ -13,9 +17,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
     private val LOCATION_PERMISSION_REQUEST_CODE = 1000
+    private var sensorManager: SensorManager? = null
+    private var lightSensor: Sensor? = null
+    private var lastTheme: String = "unknown"
+    private var lastLux: Float = -1f
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +50,10 @@ class MainActivity : AppCompatActivity() {
                 val csvData = loadCsvFromAssets()
                 val escapedCsv = csvData.replace("\\", "\\\\").replace("`", "\\`").replace("\$", "\\$")
                 view?.evaluateJavascript("window.csvData = `$escapedCsv`; window.dispatchEvent(new Event('csvLoaded'));", null)
+                // Re-injecte la derniere valeur lux connue si dispo
+                if (lastLux >= 0f) {
+                    view?.evaluateJavascript("window.__onLightChange && window.__onLightChange($lastLux);", null)
+                }
             }
         }
 
@@ -50,7 +62,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.loadUrl("file:///android_asset/index.html")
+
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
     }
+
+    override fun onResume() {
+        super.onResume()
+        lightSensor?.let {
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager?.unregisterListener(this)
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type != Sensor.TYPE_LIGHT) return
+        val lux = event.values[0]
+        // Evite les envois redondants pour economiser le JS
+        if (Math.abs(lux - lastLux) < 2f) return
+        lastLux = lux
+        webView.evaluateJavascript("window.__onLightChange && window.__onLightChange($lux);", null)
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun loadCsvFromAssets(): String {
         return try {

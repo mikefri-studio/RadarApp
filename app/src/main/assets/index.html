@@ -964,27 +964,25 @@ function parseCsv(text) {
 })();
 </script>
 <script>
-// ==== THEME CLAIR / SOMBRE ====
+// ==== THEME CLAIR / SOMBRE (auto capteur + systeme + appui long) ====
 (function () {
   var THEMES = {
     dark: {
       bg: '#101014', earth: '#16161c', landuse: '#1b1b22', park: '#1f2518', water: '#12283d',
-      roadHi: '#8a7a4a', roadMaj: '#5a5a66', roadDef: '#3c3c46',
-      bound: '#6a6a7a',
-      txtPlace: '#d0d0d8', haloPlace: 'rgba(0,0,0,0.85)',
-      txtRoad: '#a8a8b2', haloRoad: 'rgba(0,0,0,0.8)'
+      roadHi: '#8a7a4a', roadMaj: '#5a5a66', roadDef: '#3c3c46', bound: '#6a6a7a',
+      txtPlace: '#d0d0d8', haloPlace: 'rgba(0,0,0,0.85)', txtRoad: '#a8a8b2', haloRoad: 'rgba(0,0,0,0.8)'
     },
     light: {
       bg: '#f5f3ee', earth: '#ebe7dc', landuse: '#d8d3c5', park: '#b8d0a0', water: '#a8c8e8',
-      roadHi: '#e8c878', roadMaj: '#ffffff', roadDef: '#ebebeb',
-      bound: '#c0c0c0',
-      txtPlace: '#333', haloPlace: 'rgba(255,255,255,0.9)',
-      txtRoad: '#444', haloRoad: 'rgba(255,255,255,0.85)'
+      roadHi: '#e8c878', roadMaj: '#ffffff', roadDef: '#ebebeb', bound: '#c0c0c0',
+      txtPlace: '#333', haloPlace: 'rgba(255,255,255,0.9)', txtRoad: '#444', haloRoad: 'rgba(255,255,255,0.85)'
     }
   };
   var KEY = 'themeMode';
   var current = localStorage.getItem(KEY) || 'dark';
   var layersBackup = null;
+  var manualOverride = null; // "dark" ou "light" si l'utilisateur a forcé
+  var lastLux = -1;
 
   function saveCustomLayers() {
     var s = map.getStyle();
@@ -992,7 +990,6 @@ function parseCsv(text) {
   }
   function restoreCustomLayers() {
     if (!layersBackup) return;
-    // Recree la source radars
     if (!map.getSource('radars') && window.allRadars) {
       try {
         map.addSource('radars', {
@@ -1001,16 +998,14 @@ function parseCsv(text) {
             return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: r };
           })}
         });
-      } catch (e) { console.log('[theme] erreur addSource radars', e); }
+      } catch (e) { console.log('[theme] addSource err', e); }
     }
-    // Restaure les couches
     var cur = map.getStyle();
     layersBackup.forEach(function (layer) {
       if (!cur.layers.some(function (l) { return l.id === layer.id; })) {
-        try { map.addLayer(layer); } catch (e) { console.log('[theme] erreur addLayer', layer.id, e); }
+        try { map.addLayer(layer); } catch (e) { console.log('[theme] addLayer err', layer.id, e); }
       }
     });
-    // Re-couleurs les cercles
     try {
       map.setPaintProperty('radars', 'circle-color', 'rgba(0,0,0,0)');
       map.setPaintProperty('radars', 'circle-radius', 12);
@@ -1057,31 +1052,61 @@ function parseCsv(text) {
   }
 
   function applyTheme(name, animate) {
+    if (name === current) return;
     saveCustomLayers();
     current = name;
     try { localStorage.setItem(KEY, name); } catch (e) {}
     map.setStyle(buildStyle(name));
     map.once('styledata', function () { setTimeout(restoreCustomLayers, 300); });
-    var btn = document.getElementById('btnTheme');
-    if (btn) btn.textContent = name === 'dark' ? '☀️' : '🌙';
   }
 
-  // Bouton ajoute au panneau
-  function ajouterBouton() {
-    var panel = document.getElementById('panelBtns');
-    if (!panel || document.getElementById('btnTheme')) { setTimeout(ajouterBouton, 300); return; }
-    var b = document.createElement('button');
-    b.id = 'btnTheme';
-    b.textContent = current === 'dark' ? '☀️' : '🌙';
-    b.title = 'Basculer thème clair/sombre';
-    b.onclick = function () { applyTheme(current === 'dark' ? 'light' : 'dark', true); };
-    panel.insertBefore(b, panel.firstChild);
+  // Fallback : mode systeme Android (si pas de capteur)
+  function systemPref() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+    return 'dark';
   }
 
-  if (current === 'light') {
-    map.once('load', function () { setTimeout(function () { applyTheme('light'); }, 100); });
+  // Capteur de luminosite : hysteresis anti-clignotement
+  window.__onLightChange = function (lux) {
+    if (lux == null || isNaN(lux)) return;
+    // Si utilisateur a force manuellement, ignore le capteur pendant 30 min
+    if (manualOverride && Date.now() - manualOverride.time < 30 * 60 * 1000) return;
+    lastLux = lux;
+    var wanted = null;
+    if (lux < 30) wanted = 'dark';
+    else if (lux > 120) wanted = 'light';
+    // entre 30 et 120 : pas de changement (zone grise = pas de clignotement)
+    if (wanted && wanted !== current) applyTheme(wanted);
+  };
+
+  // Bascule manuelle : appui long sur le compteur de vitesse
+  function setupManualToggle() {
+    var hud = document.getElementById('hudVitesse');
+    if (!hud) { setTimeout(setupManualToggle, 500); return; }
+    var lpTimer = null;
+    hud.addEventListener('touchstart', function (e) {
+      if (lpTimer) clearTimeout(lpTimer);
+      lpTimer = setTimeout(function () {
+        lpTimer = null;
+        var newTheme = current === 'dark' ? 'light' : 'dark';
+        applyTheme(newTheme);
+        manualOverride = { theme: newTheme, time: Date.now() };
+        try { if (navigator.vibrate) navigator.vibrate([40, 30, 40]); } catch (e2) {}
+      }, 600);
+    }, { passive: true });
+    hud.addEventListener('touchend', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
+    hud.addEventListener('touchmove', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
   }
-  map.once('load', ajouterBouton);
+
+  map.once('load', function () {
+    setTimeout(setupManualToggle, 500);
+    // Si aucun capteur, applique le mode systeme
+    setTimeout(function () {
+      if (lastLux < 0 && current !== systemPref()) {
+        applyTheme(systemPref());
+      }
+    }, 1000);
+  });
 })();
 </script>
 </body>
