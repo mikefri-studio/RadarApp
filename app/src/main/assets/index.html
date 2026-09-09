@@ -792,5 +792,45 @@ function parseCsv(text) {
   }, 2000);
 })();
 </script>
+<script>
+// ==== ICONES RADARS PAR TYPE ====
+(function () {
+  function setupIcons() {
+    if (!map.getSource || !map.getSource('radars')) { setTimeout(setupIcons, 500); return; }
+    if (map.getLayer('radars-icons')) return;
+    // Points officiels invisibles (mais cliquables), perso = petit point orange
+    map.setPaintProperty('radars', 'circle-color', ['case', ['==', ['slice', ['to-string', ['get', 'id']], 0, 6], 'perso-'], '#ff9800', 'rgba(0,0,0,0)']);
+    map.setPaintProperty('radars', 'circle-opacity', 1);
+    map.setPaintProperty('radars', 'circle-radius', 5);
+    // Logos selon le type
+    map.addLayer({
+      id: 'radars-icons',
+      type: 'symbol',
+      source: 'radars',
+      layout: {
+        'text-field': ['match', ['get', 'type'],
+          'Radar feu rouge', '🚦',
+          'Feu rouge', '🚦',
+          'Radar mobile', '🚔',
+          'Radar tronçon', '⏱️',
+          'Passage à niveau', '🚂',
+          'ETM', '🚔',
+          'ETT', '⏱️',
+          'ETVM', '⏱️',
+          'ETP', '🚂',
+          'ETPN', '🚂',
+          '📷'],
+        'text-size': 15,
+        'text-allow-overlap': true
+      },
+      paint: {
+        'text-halo-color': 'rgba(0,0,0,0.85)',
+        'text-halo-width': 1.5
+      }
+    });
+  }
+  setTimeout(setupIcons, 600);
+})();
+</script>
 </body>
 </html>
