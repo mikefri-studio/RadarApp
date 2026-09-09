@@ -927,5 +927,41 @@ function parseCsv(text) {
   setInterval(appliquerNoirs, 2000);
 })();
 </script>
+<script>
+// ==== CARTE ORIENTEE SENS DE MARCHE ====
+(function () {
+  var lastPos = null, capCible = null;
+  var etaitActif = null, resetEnCours = false;
+  if (navigator.geolocation) navigator.geolocation.watchPosition(function (pos) {
+    lastPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    var v = pos.coords.speed, h = pos.coords.heading;
+    if (v != null && v > 2 && h != null && !isNaN(h)) capCible = h;
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 500 });
+  function actif() {
+    var b = document.getElementById('btnFollow');
+    return b ? b.classList.contains('active') : true;
+  }
+  function boucle() {
+    var a = actif();
+    if (a) { resetEnCours = false; }
+    else if (a !== etaitActif) { resetEnCours = true; }
+    etaitActif = a;
+    if (a && lastPos) {
+      var c = map.getCenter();
+      if (c.lerp) map.setCenter(c.lerp(new maplibregl.LngLat(lastPos.lng, lastPos.lat), 0.15));
+      if (capCible != null) {
+        var diff = ((capCible - map.getBearing() + 540) % 360) - 180;
+        if (Math.abs(diff) > 0.3) map.setBearing(map.getBearing() + diff * 0.12);
+      }
+    } else if (resetEnCours) {
+      var d0 = ((0 - map.getBearing() + 540) % 360) - 180;
+      if (Math.abs(d0) > 0.5) map.setBearing(map.getBearing() + d0 * 0.15);
+      else resetEnCours = false;
+    }
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+})();
+</script>
 </body>
 </html>
