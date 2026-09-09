@@ -793,43 +793,54 @@ function parseCsv(text) {
 })();
 </script>
 <script>
-// ==== ICONES RADARS PAR TYPE ====
+// ==== ICONES RADARS V2 (canvas) ====
 (function () {
-  function setupIcons() {
-    if (!map.getSource || !map.getSource('radars')) { setTimeout(setupIcons, 500); return; }
-    if (map.getLayer('radars-icons')) return;
-    // Points officiels invisibles (mais cliquables), perso = petit point orange
+  function makeIcon(emoji) {
+    var c = document.createElement('canvas');
+    c.width = 48; c.height = 48;
+    var g = c.getContext('2d');
+    g.font = '30px "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(emoji, 24, 26);
+    return g.getImageData(0, 0, 48, 48);
+  }
+  function setup() {
+    if (!map.getSource || !map.getSource('radars')) { setTimeout(setup, 500); return; }
+    if (map.getLayer('radars-icons')) map.removeLayer('radars-icons');
+    if (!map.hasImage('ic-fixe')) {
+      map.addImage('ic-fixe', makeIcon('📷'), { pixelRatio: 2 });
+      map.addImage('ic-feu', makeIcon('🚦'), { pixelRatio: 2 });
+      map.addImage('ic-mobile', makeIcon('🚔'), { pixelRatio: 2 });
+      map.addImage('ic-troncon', makeIcon('⏱️'), { pixelRatio: 2 });
+      map.addImage('ic-pn', makeIcon('🚂'), { pixelRatio: 2 });
+    }
     map.setPaintProperty('radars', 'circle-color', ['case', ['==', ['slice', ['to-string', ['get', 'id']], 0, 6], 'perso-'], '#ff9800', 'rgba(0,0,0,0)']);
     map.setPaintProperty('radars', 'circle-opacity', 1);
-    map.setPaintProperty('radars', 'circle-radius', 5);
-    // Logos selon le type
+    map.setPaintProperty('radars', 'circle-radius', 8);
     map.addLayer({
       id: 'radars-icons',
       type: 'symbol',
       source: 'radars',
       layout: {
-        'text-field': ['match', ['get', 'type'],
-          'Radar feu rouge', '🚦',
-          'Feu rouge', '🚦',
-          'Radar mobile', '🚔',
-          'Radar tronçon', '⏱️',
-          'Passage à niveau', '🚂',
-          'ETM', '🚔',
-          'ETT', '⏱️',
-          'ETVM', '⏱️',
-          'ETP', '🚂',
-          'ETPN', '🚂',
-          '📷'],
-        'text-size': 15,
-        'text-allow-overlap': true
-      },
-      paint: {
-        'text-halo-color': 'rgba(0,0,0,0.85)',
-        'text-halo-width': 1.5
+        'icon-image': ['match', ['get', 'type'],
+          'Radar feu rouge', 'ic-feu',
+          'Feu rouge', 'ic-feu',
+          'Radar mobile', 'ic-mobile',
+          'Radar tronçon', 'ic-troncon',
+          'Passage à niveau', 'ic-pn',
+          'ETM', 'ic-mobile',
+          'ETT', 'ic-troncon',
+          'ETVM', 'ic-troncon',
+          'ETP', 'ic-pn',
+          'ETPN', 'ic-pn',
+          'ic-fixe'],
+        'icon-size': 0.9,
+        'icon-allow-overlap': true
       }
     });
   }
-  setTimeout(setupIcons, 600);
+  setTimeout(setup, 600);
 })();
 </script>
 </body>
