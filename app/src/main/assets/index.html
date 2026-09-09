@@ -817,7 +817,7 @@ function parseCsv(text) {
     }
     map.setPaintProperty('radars', 'circle-color', ['case', ['==', ['slice', ['to-string', ['get', 'id']], 0, 6], 'perso-'], '#ff9800', 'rgba(0,0,0,0)']);
     map.setPaintProperty('radars', 'circle-opacity', 1);
-    map.setPaintProperty('radars', 'circle-radius', 8);
+    map.setPaintProperty('radars', 'circle-radius', 0);
     map.addLayer({
       id: 'radars-icons',
       type: 'symbol',
