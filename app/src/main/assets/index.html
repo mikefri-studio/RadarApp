@@ -658,7 +658,7 @@ function parseCsv(text) {
 })();
 </script>
 <script>
-// ==== RADARS PERSO : DECLARATION V2 ====
+// ==== RADARS PERSO : DECLARATION V3 ====
 (function () {
   var KEY = 'radarsPerso';
   var perso = [];
@@ -731,24 +731,40 @@ function parseCsv(text) {
     btnDel.classList.toggle('active', modeSuppr);
   };
   document.body.appendChild(btnDel);
-  // Appui long sur la carte = declarer a cet endroit
-  var t0 = 0, p0 = null;
+  // Appui long fiable : minuteur des le debut du toucher + vibration + contextmenu
   var cv = map.getCanvas();
+  var lpTimer = null, p0 = null;
+  function pointToPos(x, y) {
+    var rect = cv.getBoundingClientRect();
+    var ll = map.unproject(new maplibregl.Point(x - rect.left, y - rect.top));
+    return { lat: ll.lat, lng: ll.lng };
+  }
+  function annulerLP() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
   cv.addEventListener('touchstart', function (e) {
-    if (e.touches.length === 1) { t0 = Date.now(); p0 = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+    if (e.touches.length === 1) {
+      p0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      annulerLP();
+      lpTimer = setTimeout(function () {
+        lpTimer = null;
+        ouvrirForm(pointToPos(p0.x, p0.y));
+        try { if (navigator.vibrate) navigator.vibrate(60); } catch (e2) {}
+      }, 400);
+    } else { annulerLP(); }
   }, { passive: true });
-  cv.addEventListener('touchend', function (e) {
-    if (!t0 || !p0) return;
-    var dt = Date.now() - t0;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - p0.x, dy = t.clientY - p0.y;
-    if (dt >= 500 && Math.sqrt(dx * dx + dy * dy) < 12) {
-      var rect = cv.getBoundingClientRect();
-      var ll = map.unproject(new maplibregl.Point(t.clientX - rect.left, t.clientY - rect.top));
-      ouvrirForm({ lat: ll.lat, lng: ll.lng });
+  cv.addEventListener('touchmove', function (e) {
+    if (lpTimer && p0 && e.touches.length) {
+      var t = e.touches[0];
+      var dx = t.clientX - p0.x, dy = t.clientY - p0.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 12) annulerLP();
     }
-    t0 = 0; p0 = null;
   }, { passive: true });
+  cv.addEventListener('touchend', annulerLP, { passive: true });
+  cv.addEventListener('touchcancel', annulerLP, { passive: true });
+  cv.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    annulerLP();
+    ouvrirForm(pointToPos(e.clientX, e.clientY));
+  });
   if (navigator.geolocation) navigator.geolocation.watchPosition(function (p) {
     lastPos = { lat: p.coords.latitude, lng: p.coords.longitude };
   }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
