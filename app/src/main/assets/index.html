@@ -669,6 +669,7 @@ function parseCsv(text) {
   var orangeFait = false;
   try { perso = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { perso = []; }
   function sauver() { try { localStorage.setItem(KEY, JSON.stringify(perso)); } catch (e) {} }
+  window.supprimerPerso = function (id) { perso = perso.filter(function (r) { return String(r.id) !== String(id); }); sauver(); mergePerso(); };
   function distM(r, lat, lng) {
     var R = 6371000, dLat = (r.lat - lat) * Math.PI / 180, dLng = (r.lng - lng) * Math.PI / 180;
     var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat*Math.PI/180)*Math.cos(r.lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
@@ -865,9 +866,14 @@ function parseCsv(text) {
   box.addEventListener('click', function (e) {
     if (e.target.id === 'verifOui') { box.style.display = 'none'; }
     if (e.target.id === 'verifNon' && candidat) {
-      noirs.push(String(candidat.id));
-      try { localStorage.setItem(KEY_NOIRS, JSON.stringify(noirs)); } catch (e2) {}
-      appliquerNoirs();
+      var idSup = String(candidat.id);
+      if (idSup.indexOf('perso-') === 0) {
+        if (window.supprimerPerso) window.supprimerPerso(idSup);
+      } else {
+        noirs.push(idSup);
+        try { localStorage.setItem(KEY_NOIRS, JSON.stringify(noirs)); } catch (e2) {}
+        appliquerNoirs();
+      }
       box.style.display = 'none';
       try { var u = new SpeechSynthesisUtterance('Radar supprime'); u.lang = 'fr-FR'; speechSynthesis.speak(u); } catch (e3) {}
     }
@@ -895,7 +901,6 @@ function parseCsv(text) {
     var proche = null, dMin = 1e9;
     for (var i = 0; i < allRadars.length; i++) {
       var r = allRadars[i];
-      if (String(r.id).indexOf('perso-') === 0) continue;
       var d = distM(r, lat, lng);
       if (d < dMin) { dMin = d; proche = r; }
     }
