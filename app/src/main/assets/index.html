@@ -625,7 +625,7 @@ function parseCsv(text) {
 // ==== RADARS : MISE A JOUR A CHAQUE OUVERTURE ====
 (function () {
   var URL_DIST = 'https://raw.githubusercontent.com/mikefri-studio/RadarApp/master/app/src/main/assets/radars.csv';
-  var KEY = 'radarsCsvCache';
+  var KEY = 'radarsCsvCacheV2';
   function appliquer(csv) {
     try {
       var r = parseCsv(csv);
@@ -647,7 +647,7 @@ function parseCsv(text) {
     if (c) appliquer(c);
   } catch (e) {}
   // Level 1 : fetch GitHub (fichier nettoye par le workflow)
-  fetch(URL_DIST, { cache: 'no-store' })
+  fetch(URL_DIST + '?t=' + Date.now(), { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.text() : ''; })
     .then(function (txt) {
       if (txt && txt.indexOf(';') > 0 && appliquer(txt)) {
