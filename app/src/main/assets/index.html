@@ -963,5 +963,120 @@ function parseCsv(text) {
   requestAnimationFrame(boucle);
 })();
 </script>
+<script>
+// ==== THEME CLAIR / SOMBRE ====
+(function () {
+  var THEMES = {
+    dark: {
+      bg: '#101014', earth: '#16161c', landuse: '#1b1b22', park: '#1f2518', water: '#12283d',
+      roadHi: '#8a7a4a', roadMaj: '#5a5a66', roadDef: '#3c3c46',
+      bound: '#6a6a7a',
+      txtPlace: '#d0d0d8', haloPlace: 'rgba(0,0,0,0.85)',
+      txtRoad: '#a8a8b2', haloRoad: 'rgba(0,0,0,0.8)'
+    },
+    light: {
+      bg: '#f5f3ee', earth: '#ebe7dc', landuse: '#d8d3c5', park: '#b8d0a0', water: '#a8c8e8',
+      roadHi: '#e8c878', roadMaj: '#ffffff', roadDef: '#ebebeb',
+      bound: '#c0c0c0',
+      txtPlace: '#333', haloPlace: 'rgba(255,255,255,0.9)',
+      txtRoad: '#444', haloRoad: 'rgba(255,255,255,0.85)'
+    }
+  };
+  var KEY = 'themeMode';
+  var current = localStorage.getItem(KEY) || 'dark';
+  var layersBackup = null;
+
+  function saveCustomLayers() {
+    var s = map.getStyle();
+    layersBackup = (s.layers || []).filter(function (l) { return l.id === 'radars' || l.id === 'radars-icons'; });
+  }
+  function restoreCustomLayers() {
+    if (!layersBackup) return;
+    var cur = map.getStyle();
+    layersBackup.forEach(function (layer) {
+      if (!cur.layers.some(function (l) { return l.id === layer.id; })) {
+        try { map.addLayer(layer); } catch (e) { console.log('restore', layer.id, e); }
+      }
+    });
+    var src = map.getSource('radars');
+    if (src && window.allRadars) {
+      try { src.setData({ type: 'FeatureCollection', features: allRadars.map(function (r) {
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: r };
+      })}); } catch (e) {}
+    }
+    // Re-couleurs les cercles persos + invisibles autres
+    try {
+      map.setPaintProperty('radars', 'circle-color', 'rgba(0,0,0,0)');
+      map.setPaintProperty('radars', 'circle-radius', 12);
+    } catch (e) {}
+  }
+
+  function buildStyle(themeName) {
+    var t = THEMES[themeName] || THEMES.dark;
+    return {
+      version: 8,
+      glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+      sources: { 'basemap': { type: 'vector', url: 'pmtiles://' + PMTILES_URL, attribution: '© OpenStreetMap' } },
+      layers: [
+        { id: 'background', type: 'background', paint: { 'background-color': t.bg } },
+        { id: 'earth', type: 'fill', source: 'basemap', 'source-layer': 'earth', paint: { 'fill-color': t.earth } },
+        { id: 'landuse', type: 'fill', source: 'basemap', 'source-layer': 'landuse', paint: {
+            'fill-color': ['match', ['get', 'kind'], 'park', t.park, 'forest', t.park, 'nature_reserve', t.park, t.landuse] } },
+        { id: 'water', type: 'fill', source: 'basemap', 'source-layer': 'water', paint: { 'fill-color': t.water } },
+        { id: 'roads', type: 'line', source: 'basemap', 'source-layer': 'roads',
+          paint: { 'line-color': ['match', ['get', 'kind'], 'highway', t.roadHi, 'major_road', t.roadMaj, t.roadDef],
+                   'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 1.6, 15, 5] } },
+        { id: 'boundaries', type: 'line', source: 'basemap', 'source-layer': 'boundaries',
+          paint: { 'line-color': t.bound, 'line-width': 1, 'line-dasharray': [2, 2] } },
+        { id: 'place-labels', type: 'symbol', source: 'basemap', 'source-layer': 'places',
+          layout: {
+            'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 13, 14, 16],
+            'text-allow-overlap': false
+          },
+          paint: { 'text-color': t.txtPlace, 'text-halo-color': t.haloPlace, 'text-halo-width': 1.5 } },
+        { id: 'road-labels', type: 'symbol', source: 'basemap', 'source-layer': 'roads',
+          minzoom: 13,
+          layout: {
+            'symbol-placement': 'line',
+            'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 16, 12],
+            'symbol-spacing': 300
+          },
+          paint: { 'text-color': t.txtRoad, 'text-halo-color': t.haloRoad, 'text-halo-width': 1 } }
+      ]
+    };
+  }
+
+  function applyTheme(name, animate) {
+    saveCustomLayers();
+    current = name;
+    try { localStorage.setItem(KEY, name); } catch (e) {}
+    map.setStyle(buildStyle(name));
+    map.once('styledata', function () { setTimeout(restoreCustomLayers, 300); });
+    var btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = name === 'dark' ? '☀️' : '🌙';
+  }
+
+  // Bouton ajoute au panneau
+  function ajouterBouton() {
+    var panel = document.getElementById('panelBtns');
+    if (!panel || document.getElementById('btnTheme')) { setTimeout(ajouterBouton, 300); return; }
+    var b = document.createElement('button');
+    b.id = 'btnTheme';
+    b.textContent = current === 'dark' ? '☀️' : '🌙';
+    b.title = 'Basculer thème clair/sombre';
+    b.onclick = function () { applyTheme(current === 'dark' ? 'light' : 'dark', true); };
+    panel.insertBefore(b, panel.firstChild);
+  }
+
+  if (current === 'light') {
+    map.once('load', function () { setTimeout(function () { applyTheme('light'); }, 100); });
+  }
+  map.once('load', ajouterBouton);
+})();
+</script>
 </body>
 </html>
