@@ -660,6 +660,10 @@ function parseCsv(text) {
 </script>
 <script>
 // ==== RADARS PERSO : DECLARATION V3 ====
+  // GARDE JURIDIQUE : seuls ces types pourront JAMAIS etre partages en communautaire.
+  // Les controles mobiles sont exclus par design (loi LOPPSI 2, 2011).
+  var SHAREABLE_TYPES = ['Radar fixe', 'Feu rouge', 'Radar troncon', 'Passage a niveau'];
+  window.estPartageable = function (r) { return SHAREABLE_TYPES.indexOf(String(r.type)) !== -1; };
 (function () {
   var KEY = 'radarsPerso';
   var perso = [];
@@ -1107,6 +1111,16 @@ function parseCsv(text) {
       }
     }, 1000);
   });
+})();
+</script>
+<script>
+// ==== BOUTON INFO ====
+(function () {
+  var b = document.createElement('button');
+  b.id = 'btnInfo';
+  b.textContent = 'ℹ️';
+  b.onclick = function () { window.location.href = 'about.html'; };
+  document.body.appendChild(b);
 })();
 </script>
 </body>
