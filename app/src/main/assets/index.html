@@ -692,9 +692,9 @@ function parseCsv(text) {
   var form = document.createElement('div');
   form.id = 'declForm';
   form.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10000;display:none;background:rgba(20,22,28,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:16px;color:#fff;min-width:230px;box-shadow:0 10px 40px rgba(0,0,0,.6);';
-  form.innerHTML = '<div id="declTitre" style="font-weight:700;margin-bottom:10px;">📍 Déclarer un radar</div>' +
+  form.innerHTML = '<div id="declTitre" style="font-weight:700;margin-bottom:6px;">📍 Déclarer un radar</div>' + '<div style="font-size:11px;opacity:.7;margin-bottom:8px;">Équipements fixes uniquement (conformité loi).</div>' +
     '<select id="declType" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:8px;background:#2a2d36;color:#fff;">' +
-    '<option>Radar fixe</option><option>Radar mobile</option><option>Feu rouge</option><option>Radar tronçon</option><option>Passage à niveau</option></select>' +
+    '<option>Radar fixe</option><option>Feu rouge</option><option>Radar tronçon</option><option>Passage à niveau</option></select>' +
     '<select id="declVit" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:12px;background:#2a2d36;color:#fff;">' +
     '<option value="">Vitesse inconnue</option><option>30</option><option>50</option><option>70</option><option>80</option><option>90</option><option>110</option><option>130</option></select>' +
     '<div style="display:flex;gap:8px;">' +
