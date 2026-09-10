@@ -3,3 +3,8 @@
 pmtiles.zip
 pmtiles-cli/*.exe
 
+
+*.keystore
+*.jks
+keystore.properties
+local.properties
