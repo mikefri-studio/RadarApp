@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>À propos - RadarZen</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #101014; color: #e0e0e0; padding: 20px; line-height: 1.6; }
+    body.light { background: #f5f3ee; color: #333; }
+    h1 { font-size: 24px; margin-bottom: 16px; color: #4fc3f7; }
+    body.light h1 { color: #0277bd; }
+    h2 { font-size: 18px; margin: 20px 0 10px 0; color: #81c784; }
+    body.light h2 { color: #2e7d32; }
+    p { margin-bottom: 12px; }
+    ul { margin-left: 20px; margin-bottom: 12px; }
+    li { margin-bottom: 6px; }
+    a { color: #4fc3f7; text-decoration: none; }
+    body.light a { color: #0277bd; }
+    .back-btn { position: fixed; top: 20px; right: 20px; background: rgba(79,195,247,0.2); color: #4fc3f7; border: 1px solid #4fc3f7; padding: 10px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; z-index: 1000; }
+    body.light .back-btn { background: rgba(2,119,189,0.2); color: #0277bd; border-color: #0277bd; }
+    .section { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+    body.light .section { background: rgba(0,0,0,0.05); }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 14px; opacity: 0.8; }
+    body.light .footer { border-top-color: rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+  <button class="back-btn" onclick="window.history.back()">← Retour</button>
+  <h1>🚗 RadarZen</h1>
+  <p>Application d'avertissement de radars fixes basée sur les données officielles françaises.</p>
+
+  <div class="section">
+    <h2>📋 Mentions légales</h2>
+    <p><strong>Éditeur :</strong> Mikefri Studio</p>
+    <p><strong>Contact :</strong> mikefri.studio@gmail.com</p>
+    <p><strong>Date de dernière mise à jour :</strong> Septembre 2026</p>
+  </div>
+
+  <div class="section">
+    <h2>🗺️ Données cartographiques</h2>
+    <p>Les cartes proviennent d'<strong>OpenStreetMap</strong>, projet collaboratif de cartographie libre.</p>
+    <p><strong>Licence :</strong> Open Database License (ODbL) — <strong>Attribution :</strong> © Contributeurs OpenStreetMap</p>
+    <p><a href="https://www.openstreetmap.org/copyright" target="_blank">En savoir plus sur OpenStreetMap</a></p>
+  </div>
+
+  <div class="section">
+    <h2>🚦 Données des radars</h2>
+    <p>Les positions des radars fixes proviennent du jeu de données officiel du <strong>Ministère de l'Intérieur</strong>.</p>
+    <p><strong>Source :</strong> data.gouv.fr — Liste des radars fixes en France — <strong>Licence :</strong> Licence Ouverte Etalab 2.0</p>
+    <p><a href="https://www.data.gouv.fr/fr/datasets/liste-des-radars-fixes-en-france/" target="_blank">Consulter le dataset officiel</a></p>
+    <p>Mise à jour automatique quotidienne depuis la source officielle.</p>
+  </div>
+
+  <div class="section">
+    <h2>🔒 Politique de confidentialité</h2>
+    <ul>
+      <li><strong>Aucune donnée personnelle</strong> collectée ni transmise à des tiers</li>
+      <li><strong>Aucun tracking</strong> de vos déplacements ou trajets</li>
+      <li><strong>Aucun compte utilisateur</strong> requis</li>
+      <li>Vos radars personnalisés et préférences restent <strong>sur votre téléphone</strong></li>
+      <li>La position GPS sert uniquement à afficher les radars proches</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>⚖️ Utilisation légale</h2>
+    <ul>
+      <li>Avertisseur de radars fixes autorisé (article R413-15 du Code de la Route)</li>
+      <li>Données publiques librement réutilisables</li>
+      <li>L'application ne détecte pas les radars mobiles en temps réel</li>
+      <li><strong>Engagement :</strong> les contrôles mobiles ne seront <strong>jamais</strong> partagés entre utilisateurs, même dans une future fonctionnalité communautaire (conformité LOPPSI 2)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>💻 Technologies</h2>
+    <ul>
+      <li>Cartographie : MapLibre GL JS + tuiles Protomaps</li>
+      <li>Framework : Android WebView</li>
+      <li>Données : data.gouv.fr (gouvernement français)</li>
+      <li>Mises à jour : GitHub Actions</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <p><strong>Version :</strong> 1.0.0 — © 2026 Mikefri Studio</p>
+  </div>
+
+  <script>
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) document.body.classList.add('light');
+  </script>
+</body>
+</html>
