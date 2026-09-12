@@ -112,8 +112,6 @@ var follow = true, routeMode = true, currentHeading = null;
 var filterFeu = false, filterHide50 = false, alerted = {};
 var mapReady = false, radarsPending = false, alertPopup = null;
 var ALERT_DIST = 500, SHOW_DIST = 2000, currentKmh = null, audioCtx = null;
-function seuilVisuel() { return (window.RZ_DIST && window.RZ_DIST.visuelle) || 500; }
-function seuilVocal() { return (window.RZ_DIST && window.RZ_DIST.vocale) || 300; }
 
 map.on('dragstart', function(){ follow = false; updateBtns(); });
 map.on('load', function(){ mapReady = true; if (radarsPending) renderRadars(); });
@@ -250,7 +248,7 @@ function updateHud(nearest, dist) {
     speedEl.innerHTML = currentKmh + ' <small>km/h</small>';
     speedEl.className = (limit != null && currentKmh > limit) ? 'over' : '';
   }
-  hud.className = (nearest && dist <= seuilVisuel()) ? 'overlay alerting' : 'overlay';
+  hud.className = (nearest && dist <= rzSeuilType(nearest.type)) ? 'overlay alerting' : 'overlay';
 }
 function checkProximity(lat, lng) {
   var nearest = null, nearestDist = Infinity;
@@ -267,7 +265,7 @@ function checkProximity(lat, lng) {
     nearestDist = d; nearest = r;
   }
   updateHud(nearest, nearestDist);
-  if (nearest && nearestDist <= seuilVisuel()) {
+  if (nearest && nearestDist <= rzSeuilType(nearest.type)) {
     if (!alerted[nearest.id]) {
       alerted[nearest.id] = true;
       if (navigator.vibrate) navigator.vibrate([400,150,400]);
@@ -1194,169 +1192,24 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 input, textarea { -webkit-user-select: text; user-select: text; }
 </style>
 
+
+
+
+
 <script>
-// ==== REGLAGES DISTANCES PAR TYPE ====
+// ==== ADAPTATION VITESSE AUTOMATIQUE ====
 (function () {
-  window.RZ_DIST_TYPES = {
-    'Radar fixe': parseInt(localStorage.getItem('rzDistFixe') || '500', 10),
-    'Feu rouge': parseInt(localStorage.getItem('rzDistFeu') || '300', 10),
-    'Radar troncon': parseInt(localStorage.getItem('rzDistTroncon') || '800', 10),
-    'Passage a niveau': parseInt(localStorage.getItem('rzDistPassage') || '400', 10)
-  };
-  window.rzSeuilType = function (type) {
-    return window.RZ_DIST_TYPES[type] || 500;
-  };
-
-  var btn = document.createElement('button');
-  btn.id = 'btnReglages';
-  btn.textContent = '⚙️';
-  btn.onclick = function () { ouvrirReglages(); };
-  document.body.appendChild(btn);
-
-  function ouvrirReglages() {
-    var ov = document.createElement('div');
-    ov.id = 'ovReglages';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    ov.innerHTML =
-      '<div style="background:#1b1b22;color:#eee;padding:20px;border-radius:14px;width:85%;max-width:340px;max-height:80vh;overflow-y:auto;">' +
-      '<div style="font-weight:700;margin-bottom:14px;">⚙️ Distances par type</div>' +
-      '<label style="font-size:13px;">🚗 Radar fixe : <span id="rzVFixe"></span> m</label>' +
-      '<input id="rzSliderFixe" type="range" min="100" max="1500" step="50" style="width:100%;margin:6px 0 14px 0;">' +
-      '<label style="font-size:13px;">🚦 Feu rouge : <span id="rzVFeu"></span> m</label>' +
-      '<input id="rzSliderFeu" type="range" min="100" max="1500" step="50" style="width:100%;margin:6px 0 14px 0;">' +
-      '<label style="font-size:13px;">📏 Radar tronçon : <span id="rzVTroncon"></span> m</label>' +
-      '<input id="rzSliderTroncon" type="range" min="100" max="1500" step="50" style="width:100%;margin:6px 0 14px 0;">' +
-      '<label style="font-size:13px;">🚂 Passage à niveau : <span id="rzVPassage"></span> m</label>' +
-      '<input id="rzSliderPassage" type="range" min="100" max="1500" step="50" style="width:100%;margin:6px 0 18px 0;">' +
-      '<button id="rzFermer" style="width:100%;padding:10px;border-radius:8px;border:none;background:#4fc3f7;color:#000;font-weight:700;">OK</button>' +
-      '</div>';
-    document.body.appendChild(ov);
-
-    var sFixe = ov.querySelector('#rzSliderFixe');
-    var sFeu = ov.querySelector('#rzSliderFeu');
-    var sTroncon = ov.querySelector('#rzSliderTroncon');
-    var sPassage = ov.querySelector('#rzSliderPassage');
-
-    sFixe.value = window.RZ_DIST_TYPES['Radar fixe'];
-    sFeu.value = window.RZ_DIST_TYPES['Feu rouge'];
-    sTroncon.value = window.RZ_DIST_TYPES['Radar troncon'];
-    sPassage.value = window.RZ_DIST_TYPES['Passage a niveau'];
-
-    function maj() {
-      ov.querySelector('#rzVFixe').textContent = sFixe.value;
-      ov.querySelector('#rzVFeu').textContent = sFeu.value;
-      ov.querySelector('#rzVTroncon').textContent = sTroncon.value;
-      ov.querySelector('#rzVPassage').textContent = sPassage.value;
-    }
-    sFixe.oninput = maj;
-    sFeu.oninput = maj;
-    sTroncon.oninput = maj;
-    sPassage.oninput = maj;
-    maj();
-
-    ov.querySelector('#rzFermer').onclick = function () {
-      window.RZ_DIST_TYPES['Radar fixe'] = parseInt(sFixe.value, 10);
-      window.RZ_DIST_TYPES['Feu rouge'] = parseInt(sFeu.value, 10);
-      window.RZ_DIST_TYPES['Radar troncon'] = parseInt(sTroncon.value, 10);
-      window.RZ_DIST_TYPES['Passage a niveau'] = parseInt(sPassage.value, 10);
-      localStorage.setItem('rzDistFixe', String(window.RZ_DIST_TYPES['Radar fixe']));
-      localStorage.setItem('rzDistFeu', String(window.RZ_DIST_TYPES['Feu rouge']));
-      localStorage.setItem('rzDistTroncon', String(window.RZ_DIST_TYPES['Radar troncon']));
-      localStorage.setItem('rzDistPassage', String(window.RZ_DIST_TYPES['Passage a niveau']));
-      ov.remove();
-      window.dispatchEvent(new Event('rzDistChange'));
-    };
-  }
-})();
-</script>
-<script>
-// ==== REGLAGES DISTANCES PAR TYPE ET PAR VITESSE ====
-(function () {
-  var DEFAUTS = {
-    'Radar fixe':       { v50: 300, v90: 500, vplus: 800 },
-    'Feu rouge':        { v50: 150, v90: 250, vplus: 350 },
-    'Radar troncon':    { v50: 400, v90: 700, vplus: 1000 },
-    'Passage a niveau': { v50: 250, v90: 400, vplus: 600 }
-  };
-  function slug(t) { return t.replace(/[^a-z]/gi, ''); }
-
-  window.RZ_DIST_TYPES = {};
-  Object.keys(DEFAUTS).forEach(function (t) {
-    var s = slug(t);
-    window.RZ_DIST_TYPES[t] = {
-      v50:   parseInt(localStorage.getItem('rz_' + s + '_v50')   || DEFAUTS[t].v50, 10),
-      v90:   parseInt(localStorage.getItem('rz_' + s + '_v90')   || DEFAUTS[t].v90, 10),
-      vplus: parseInt(localStorage.getItem('rz_' + s + '_vplus') || DEFAUTS[t].vplus, 10)
-    };
-  });
+  var TEMPS = { 'Radar fixe': 12, 'Feu rouge': 6, 'Radar troncon': 15, 'Passage a niveau': 10 };
+  var PLANCHER = { 'Radar fixe': 200, 'Feu rouge': 100, 'Radar troncon': 300, 'Passage a niveau': 150 };
 
   window.rzSeuilType = function (type) {
-    var cfg = window.RZ_DIST_TYPES[type] || DEFAUTS['Radar fixe'];
-    var kmh = (typeof currentKmh === 'number' && currentKmh > 0) ? currentKmh : null;
-    if (kmh == null) return cfg.v90;
-    if (kmh <= 50) return cfg.v50;
-    if (kmh <= 90) return cfg.v90;
-    return cfg.vplus;
+    var sec = TEMPS[type] || 10;
+    var min = PLANCHER[type] || 150;
+    var kmh = (typeof currentKmh === 'number' && currentKmh > 0) ? currentKmh : 0;
+    var mps = kmh / 3.6;
+    var dyn = Math.round(mps * sec);
+    return Math.max(min, dyn);
   };
-
-  var btn = document.createElement('button');
-  btn.id = 'btnReglages';
-  btn.textContent = '⚙️';
-  btn.onclick = ouvrir;
-  document.body.appendChild(btn);
-
-  var TYPES = ['Radar fixe', 'Feu rouge', 'Radar troncon', 'Passage a niveau'];
-  var ICONES = { 'Radar fixe': '🚗', 'Feu rouge': '🚦', 'Radar troncon': '📏', 'Passage a niveau': '🚂' };
-  var PALIERS = [['v50', '≤ 50 km/h (ville)'], ['v90', '≤ 90 km/h (route)'], ['vplus', '> 90 km/h (autoroute)']];
-
-  function ouvrir() {
-    var ov = document.createElement('div');
-    ov.id = 'ovReglages';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    var html = '<div style="background:#1b1b22;color:#eee;padding:18px;border-radius:14px;width:88%;max-width:380px;max-height:85vh;overflow-y:auto;">'
-      + '<div style="font-weight:700;margin-bottom:4px;">⚙️ Distances par type & vitesse</div>'
-      + '<div style="font-size:11px;opacity:.7;margin-bottom:10px;">Choisis la distance d\'alerte selon ta vitesse</div>';
-    TYPES.forEach(function (t) {
-      html += '<div style="border-top:1px solid #333;margin-top:8px;padding-top:8px;"><div style="font-weight:600;margin-bottom:6px;">' + ICONES[t] + ' ' + t + '</div>';
-      PALIERS.forEach(function (p) {
-        var id = 'rz_' + slug(t) + '_' + p[0];
-        html += '<label style="font-size:12px;">' + p[1] + ' : <span id="l_' + id + '"></span> m</label>'
-          + '<input id="' + id + '" type="range" min="50" max="1500" step="50" value="' + window.RZ_DIST_TYPES[t][p[0]] + '" style="width:100%;margin:4px 0 8px 0;">';
-      });
-      html += '</div>';
-    });
-    html += '<button id="rzFermer" style="width:100%;padding:10px;border-radius:8px;border:none;background:#4fc3f7;color:#000;font-weight:700;margin-top:10px;">OK</button></div>';
-    ov.innerHTML = html;
-    document.body.appendChild(ov);
-
-    function majAll() {
-      TYPES.forEach(function (t) {
-        PALIERS.forEach(function (p) {
-          var id = 'rz_' + slug(t) + '_' + p[0];
-          ov.querySelector('#l_' + id).textContent = ov.querySelector('#' + id).value;
-        });
-      });
-    }
-    TYPES.forEach(function (t) {
-      PALIERS.forEach(function (p) {
-        ov.querySelector('#rz_' + slug(t) + '_' + p[0]).oninput = majAll;
-      });
-    });
-    majAll();
-
-    ov.querySelector('#rzFermer').onclick = function () {
-      TYPES.forEach(function (t) {
-        PALIERS.forEach(function (p) {
-          var id = 'rz_' + slug(t) + '_' + p[0];
-          var val = parseInt(ov.querySelector('#' + id).value, 10);
-          window.RZ_DIST_TYPES[t][p[0]] = val;
-          localStorage.setItem(id, String(val));
-        });
-      });
-      ov.remove();
-      window.dispatchEvent(new Event('rzDistChange'));
-    };
-  }
 })();
 </script>
 </body>
