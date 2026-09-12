@@ -1178,7 +1178,7 @@ function parseCsv(text) {
     return false;
   }
   window.__dire = dire;
-  setTimeout(function () { dire('Radar Zen pret'); }, 2500);
+  setTimeout(function () { dire('Radar Zen activé, bonne route'); }, 2500);
   document.addEventListener('click', function (e) {
     var t = e.target;
     if (t && t.textContent && t.textContent.indexOf('🔊') !== -1) {
@@ -1187,5 +1187,9 @@ function parseCsv(text) {
   });
 })();
 </script>
+<style>
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+</style>
 </body>
 </html>
