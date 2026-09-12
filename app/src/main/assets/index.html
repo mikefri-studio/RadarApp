@@ -1212,5 +1212,42 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   };
 })();
 </script>
+
+<script>
+// ==== SON SIGNATURE RADARZEN (VERSION FORTE) ====
+(function () {
+  function ctx() {
+    if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
+    return window.audioCtx;
+  }
+  function tone(ac, start, f0, f1, dur, gain, type) {
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'triangle';
+    o.frequency.setValueAtTime(f0, start);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, start + dur);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(gain, start + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(start); o.stop(start + dur + 0.02);
+  }
+  // Signature FORTE : triangle (harmoniques) + octave superieure pour percer le bruit
+  window.beep = function () {
+    try {
+      var ac = ctx(), t = ac.currentTime + 0.01;
+      tone(ac, t,        700, 1400, 0.12, 0.8,  'triangle');
+      tone(ac, t + 0.12, 1568, 1568, 0.20, 1.0, 'triangle');
+      tone(ac, t + 0.12, 3136, 3136, 0.20, 0.4, 'sine');
+      tone(ac, t + 0.36, 1568, 1568, 0.22, 0.5, 'triangle');
+      tone(ac, t + 0.36, 3136, 3136, 0.22, 0.2, 'sine');
+    } catch (e) {}
+  };
+  // Test du son : tape sur le panneau "Prochain radar"
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#next')) window.beep();
+  });
+})();
+</script>
 </body>
 </html>
