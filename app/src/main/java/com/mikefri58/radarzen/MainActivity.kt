@@ -1,4 +1,4 @@
-﻿package com.mikefri58.radarzen
+package com.mikefri58.radarzen
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -13,6 +13,8 @@ import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
+import android.speech.tts.TextToSpeech
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -24,6 +26,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var lightSensor: Sensor? = null
     private var lastTheme: String = "unknown"
     private var lastLux: Float = -1f
+    private var tts: TextToSpeech? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +40,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         webView.settings.domStorageEnabled = true
         webView.settings.setGeolocationEnabled(true)
         webView.settings.allowFileAccess = true
+        webView.settings.mediaPlaybackRequiresUserGesture = false
+
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = java.util.Locale.FRENCH
+            }
+        }
+        webView.addJavascriptInterface(object {
+            @JavascriptInterface
+            fun speak(text: String) {
+                runOnUiThread {
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                }
+            }
+        }, "AndroidTTS")
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
@@ -89,6 +107,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    override fun onDestroy() {
+        tts?.shutdown()
+        super.onDestroy()
+    }
 
     private fun loadCsvFromAssets(): String {
         return try {

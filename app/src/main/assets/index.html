@@ -1123,5 +1123,69 @@ function parseCsv(text) {
   document.body.appendChild(b);
 })();
 </script>
+<script>
+// ==== DEBLOCAGE VOIX ====
+(function () {
+  function unlock() {
+    try {
+      if (!window.speechSynthesis) return;
+      speechSynthesis.resume();
+      var u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  document.addEventListener('touchstart', unlock, { once: true });
+  // Certains WebViews mettent la file vocale en pause : resume avant chaque speak
+  if (window.speechSynthesis) {
+    var orig = speechSynthesis.speak.bind(speechSynthesis);
+    speechSynthesis.speak = function (u) { try { speechSynthesis.resume(); } catch (e) {} return orig(u); };
+  }
+  // Confirmation audible quand on touche le bouton voix (test immediat)
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'btnVoix') {
+      setTimeout(function () {
+        try {
+          var on = document.getElementById('btnVoix').classList.contains('active');
+          var u = new SpeechSynthesisUtterance(on ? 'Voix activee' : 'Voix coupee');
+          u.lang = 'fr-FR';
+          speechSynthesis.speak(u);
+        } catch (e2) {}
+      }, 80);
+    }
+  });
+})();
+</script>
+<script>
+// ==== TTS NATIF ANDROID ====
+(function () {
+  if (!window.speechSynthesis) return;
+  var origSpeak = speechSynthesis.speak.bind(speechSynthesis);
+  speechSynthesis.speak = function (u) {
+    var texte = (u && u.text) ? u.text : String(u);
+    if (window.AndroidTTS && window.AndroidTTS.speak) {
+      try { window.AndroidTTS.speak(texte); return; } catch (e) {}
+    }
+    return origSpeak(u);
+  };
+})();
+</script>
+<script>
+// ==== TEST TTS DEMARRAGE ====
+(function () {
+  function dire(t) {
+    if (window.AndroidTTS && window.AndroidTTS.speak) { window.AndroidTTS.speak(t); return true; }
+    return false;
+  }
+  window.__dire = dire;
+  setTimeout(function () { dire('Radar Zen pret'); }, 2500);
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.textContent && t.textContent.indexOf('🔊') !== -1) {
+      setTimeout(function () { dire('Test voix radar'); }, 150);
+    }
+  });
+})();
+</script>
 </body>
 </html>
