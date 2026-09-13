@@ -1139,6 +1139,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   var lastLux = -1;
   var lastThemeChange = 0;
   var DEBOUNCE_MS = 5000;
+  window.SATELLITE = (localStorage.getItem('satMode') === '1');
 
   function log(msg) { console.log('[theme] ' + msg); }
 
@@ -1171,6 +1172,13 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   }
 
   function buildStyle(themeName) {
+    if (window.SATELLITE) {
+      return {
+        version: 8,
+        sources: { esri: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256 } },
+        layers: [ { id: 'sat', type: 'raster', source: 'esri' } ]
+      };
+    }
     var t = THEMES[themeName] || THEMES.dark;
     return {
       version: 8,
@@ -1203,6 +1211,17 @@ input, textarea { -webkit-user-select: text; user-select: text; }
         map.once('idle', function () { log('theme ' + name + ' applique + calques restaures'); });
       }, 500);
     });
+  }
+
+  window.toggleSatellite = function () {
+    window.SATELLITE = !window.SATELLITE;
+    try { localStorage.setItem('satMode', window.SATELLITE ? '1' : '0'); } catch (e) {}
+    forceRefresh();
+  };
+  function forceRefresh() {
+    saveCustomLayers();
+    map.setStyle(buildStyle(current));
+    map.once('styledata', function () { setTimeout(restoreCustomLayers, 500); });
   }
 
   function systemPref() {
@@ -1321,6 +1340,27 @@ input, textarea { -webkit-user-select: text; user-select: text; }
       navigator.vibrate([60, 40, 60]);
     }
   });
+})();
+</script>
+<script>
+// ==== BOUTON VUE SATELLITE ====
+(function () {
+  var btn = document.createElement('button');
+  btn.id = 'btnSatellite';
+  btn.textContent = '🛰️';
+  btn.style.cssText = 'position:fixed;right:12px;bottom:150px;z-index:60;width:46px;height:46px;border-radius:50%;border:none;background:rgba(30,32,40,.9);color:#fff;font-size:20px;';
+  document.body.appendChild(btn);
+  var cred = document.createElement('div');
+  cred.id = 'satCred';
+  cred.textContent = 'Imagerie © Esri, Maxar, Earthstar Geographics';
+  cred.style.cssText = 'position:fixed;left:8px;bottom:4px;z-index:55;font-size:9px;color:rgba(255,255,255,.6);display:none;';
+  document.body.appendChild(cred);
+  function maj() {
+    cred.style.display = window.SATELLITE ? 'block' : 'none';
+    btn.style.background = window.SATELLITE ? 'rgba(79,195,247,.9)' : 'rgba(30,32,40,.9)';
+  }
+  btn.onclick = function () { if (window.toggleSatellite) { window.toggleSatellite(); maj(); } };
+  maj();
 })();
 </script>
 </body>
