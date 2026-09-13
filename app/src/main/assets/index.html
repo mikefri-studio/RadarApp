@@ -203,15 +203,26 @@ function renderRadars() {
   }
   document.getElementById('status').textContent = count + ' radars affichés';
 }
+var ICONES_BANDEAU = { 'Radar fixe': '📷', 'Feu rouge': '🚦', 'Radar troncon': '📏', 'Passage a niveau': '🚂' };
 function showRadarPopup(r, d) {
-  if (!alertPopup) {
-    alertPopup = new maplibregl.Popup({ closeButton: false, offset: 8 }).setLngLat([r.lng, r.lat]).setHTML(radarInfoHTML(r, d)).addTo(map);
-  } else {
-    alertPopup.setLngLat([r.lng, r.lat]).setHTML(radarInfoHTML(r, d));
+  var b = document.getElementById('alertBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'alertBanner';
+    b.style.cssText = 'position:fixed;left:10px;right:10px;bottom:90px;z-index:50;background:rgba(180,30,30,0.92);color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 14px rgba(0,0,0,.4);';
+    document.body.appendChild(b);
   }
+  var ico = ICONES_BANDEAU[r.type] || '📷';
+  var lim = parseInt(r.vitesse, 10);
+  b.innerHTML = '<div style="font-size:30px;">' + ico + '</div>' +
+    '<div style="flex:1;"><div style="font-weight:700;font-size:15px;">' + translateType(r.type) + ' à ' + fmtDist(d) + '</div>' +
+    '<div style="font-size:13px;opacity:.9;">' + (lim ? 'Limité à ' + lim + ' km/h' : 'Vitesse non spécifiée') + '</div></div>';
+  b.style.display = 'flex';
 }
-function hideRadarPopup() { if (alertPopup) { alertPopup.remove(); alertPopup = null; } }
-function updateBtns() {
+function hideRadarPopup() {
+  var b = document.getElementById('alertBanner');
+  if (b) b.style.display = 'none';
+}function updateBtns() {
   document.getElementById('btnFollow').className = follow ? 'active' : '';
   document.getElementById('btnRoute').className = routeMode ? 'active' : '';
   document.getElementById('btnFeu').className = filterFeu ? 'active' : '';
@@ -252,15 +263,16 @@ function updateHud(nearest, dist) {
 }
 function checkProximity(lat, lng) {
   var nearest = null, nearestDist = Infinity;
-  var corridor = routeMode && currentHeading != null && currentKmh != null && currentKmh > 7;
+  var corridor = currentHeading != null && currentKmh != null && currentKmh > 7;
   for (var i = 0; i < allRadars.length; i++) {
     var r = allRadars[i];
     var d = haversine(lat, lng, r.lat, r.lng);
     if (d >= nearestDist) continue;
+    if (String(r.id).indexOf('perso-') === 0 && r.sens === 'oppose') continue;
     if (corridor) {
       var diff = angleDiff(bearing(lat, lng, r.lat, r.lng), currentHeading);
-      if (diff > 90) continue;
-      if (d * Math.sin(diff * Math.PI / 180) > 150) continue;
+      if (diff > 60) continue;
+      if (d * Math.sin(diff * Math.PI / 180) > 60) continue;
     }
     nearestDist = d; nearest = r;
   }
@@ -701,6 +713,8 @@ function parseCsv(text) {
     '<option>Radar fixe</option><option>Feu rouge</option><option>Radar tronçon</option><option>Passage à niveau</option></select>' +
     '<select id="declVit" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:12px;background:#2a2d36;color:#fff;">' +
     '<option value="">Vitesse inconnue</option><option>30</option><option>50</option><option>70</option><option>80</option><option>90</option><option>110</option><option>130</option></select>' +
+    '<select id="declSens" style="width:100%;padding:8px;border-radius:10px;border:none;margin-bottom:12px;background:#2a2d36;color:#fff;">' +
+    '<option value="mon_sens">🔵 Dans mon sens (me flashe)</option><option value="oppose">🔴 Sens opposé (ne me concerne pas)</option></select>' +
     '<div style="display:flex;gap:8px;">' +
     '<button id="declOk" style="flex:1;padding:10px;border:none;border-radius:10px;background:#2196f3;color:#fff;font-weight:700;">Valider</button>' +
     '<button id="declNo" style="flex:1;padding:10px;border:none;border-radius:10px;background:#444;color:#fff;">Annuler</button></div>';
@@ -712,6 +726,7 @@ function parseCsv(text) {
       perso.push({ id: 'perso-' + Date.now(), lat: pos.lat, lng: pos.lng,
         type: document.getElementById('declType').value,
         vitesse: document.getElementById('declVit').value,
+        sens: document.getElementById('declSens').value,
         date: '', route: '', emplacement: '', sens: '', commune: '' });
       sauver(); mergePerso();
       form.style.display = 'none';
@@ -967,152 +982,7 @@ function parseCsv(text) {
   requestAnimationFrame(boucle);
 })();
 </script>
-<script>
-// ==== THEME CLAIR / SOMBRE (auto capteur + systeme + appui long) ====
-(function () {
-  var THEMES = {
-    dark: {
-      bg: '#101014', earth: '#16161c', landuse: '#1b1b22', park: '#1f2518', water: '#12283d',
-      roadHi: '#8a7a4a', roadMaj: '#5a5a66', roadDef: '#3c3c46', bound: '#6a6a7a',
-      txtPlace: '#d0d0d8', haloPlace: 'rgba(0,0,0,0.85)', txtRoad: '#a8a8b2', haloRoad: 'rgba(0,0,0,0.8)'
-    },
-    light: {
-      bg: '#f5f3ee', earth: '#ebe7dc', landuse: '#d8d3c5', park: '#b8d0a0', water: '#a8c8e8',
-      roadHi: '#e8c878', roadMaj: '#ffffff', roadDef: '#ebebeb', bound: '#c0c0c0',
-      txtPlace: '#333', haloPlace: 'rgba(255,255,255,0.9)', txtRoad: '#444', haloRoad: 'rgba(255,255,255,0.85)'
-    }
-  };
-  var KEY = 'themeMode';
-  var current = localStorage.getItem(KEY) || 'dark';
-  var layersBackup = null;
-  var manualOverride = null; // "dark" ou "light" si l'utilisateur a forcé
-  var lastLux = -1;
 
-  function saveCustomLayers() {
-    var s = map.getStyle();
-    layersBackup = (s.layers || []).filter(function (l) { return l.id === 'radars' || l.id === 'radars-icons'; });
-  }
-  function restoreCustomLayers() {
-    if (!layersBackup) return;
-    if (!map.getSource('radars') && window.allRadars) {
-      try {
-        map.addSource('radars', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: allRadars.map(function (r) {
-            return { type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: r };
-          })}
-        });
-      } catch (e) { console.log('[theme] addSource err', e); }
-    }
-    var cur = map.getStyle();
-    layersBackup.forEach(function (layer) {
-      if (!cur.layers.some(function (l) { return l.id === layer.id; })) {
-        try { map.addLayer(layer); } catch (e) { console.log('[theme] addLayer err', layer.id, e); }
-      }
-    });
-    try {
-      map.setPaintProperty('radars', 'circle-color', 'rgba(0,0,0,0)');
-      map.setPaintProperty('radars', 'circle-radius', 12);
-    } catch (e) {}
-  }
-
-  function buildStyle(themeName) {
-    var t = THEMES[themeName] || THEMES.dark;
-    return {
-      version: 8,
-      glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-      sources: { 'basemap': { type: 'vector', url: 'pmtiles://' + PMTILES_URL, attribution: '© OpenStreetMap' } },
-      layers: [
-        { id: 'background', type: 'background', paint: { 'background-color': t.bg } },
-        { id: 'earth', type: 'fill', source: 'basemap', 'source-layer': 'earth', paint: { 'fill-color': t.earth } },
-        { id: 'landuse', type: 'fill', source: 'basemap', 'source-layer': 'landuse', paint: {
-            'fill-color': ['match', ['get', 'kind'], 'park', t.park, 'forest', t.park, 'nature_reserve', t.park, t.landuse] } },
-        { id: 'water', type: 'fill', source: 'basemap', 'source-layer': 'water', paint: { 'fill-color': t.water } },
-        { id: 'roads', type: 'line', source: 'basemap', 'source-layer': 'roads',
-          paint: { 'line-color': ['match', ['get', 'kind'], 'highway', t.roadHi, 'major_road', t.roadMaj, t.roadDef],
-                   'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 1.6, 15, 5] } },
-        { id: 'boundaries', type: 'line', source: 'basemap', 'source-layer': 'boundaries',
-          paint: { 'line-color': t.bound, 'line-width': 1, 'line-dasharray': [2, 2] } },
-        { id: 'place-labels', type: 'symbol', source: 'basemap', 'source-layer': 'places',
-          layout: {
-            'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
-            'text-font': ['Noto Sans Regular'],
-            'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 13, 14, 16],
-            'text-allow-overlap': false
-          },
-          paint: { 'text-color': t.txtPlace, 'text-halo-color': t.haloPlace, 'text-halo-width': 1.5 } },
-        { id: 'road-labels', type: 'symbol', source: 'basemap', 'source-layer': 'roads',
-          minzoom: 13,
-          layout: {
-            'symbol-placement': 'line',
-            'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']],
-            'text-font': ['Noto Sans Regular'],
-            'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 16, 12],
-            'symbol-spacing': 300
-          },
-          paint: { 'text-color': t.txtRoad, 'text-halo-color': t.haloRoad, 'text-halo-width': 1 } }
-      ]
-    };
-  }
-
-  function applyTheme(name, animate) {
-    if (name === current) return;
-    saveCustomLayers();
-    current = name;
-    try { localStorage.setItem(KEY, name); } catch (e) {}
-    map.setStyle(buildStyle(name));
-    map.once('styledata', function () { setTimeout(restoreCustomLayers, 300); });
-  }
-
-  // Fallback : mode systeme Android (si pas de capteur)
-  function systemPref() {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
-    return 'dark';
-  }
-
-  // Capteur de luminosite : hysteresis anti-clignotement
-  window.__onLightChange = function (lux) {
-    if (lux == null || isNaN(lux)) return;
-    // Si utilisateur a force manuellement, ignore le capteur pendant 30 min
-    if (manualOverride && Date.now() - manualOverride.time < 30 * 60 * 1000) return;
-    lastLux = lux;
-    var wanted = null;
-    if (lux < 30) wanted = 'dark';
-    else if (lux > 120) wanted = 'light';
-    // entre 30 et 120 : pas de changement (zone grise = pas de clignotement)
-    if (wanted && wanted !== current) applyTheme(wanted);
-  };
-
-  // Bascule manuelle : appui long sur le compteur de vitesse
-  function setupManualToggle() {
-    var hud = document.getElementById('hudVitesse');
-    if (!hud) { setTimeout(setupManualToggle, 500); return; }
-    var lpTimer = null;
-    hud.addEventListener('touchstart', function (e) {
-      if (lpTimer) clearTimeout(lpTimer);
-      lpTimer = setTimeout(function () {
-        lpTimer = null;
-        var newTheme = current === 'dark' ? 'light' : 'dark';
-        applyTheme(newTheme);
-        manualOverride = { theme: newTheme, time: Date.now() };
-        try { if (navigator.vibrate) navigator.vibrate([40, 30, 40]); } catch (e2) {}
-      }, 600);
-    }, { passive: true });
-    hud.addEventListener('touchend', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
-    hud.addEventListener('touchmove', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
-  }
-
-  map.once('load', function () {
-    setTimeout(setupManualToggle, 500);
-    // Si aucun capteur, applique le mode systeme
-    setTimeout(function () {
-      if (lastLux < 0 && current !== systemPref()) {
-        applyTheme(systemPref());
-      }
-    }, 1000);
-  });
-})();
-</script>
 <script>
 // ==== BOUTON INFO ====
 (function () {
@@ -1246,6 +1116,210 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   // Test du son : tape sur le panneau "Prochain radar"
   document.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('#next')) window.beep();
+  });
+})();
+</script>
+<script>
+// ==== THEME CLAIR / SOMBRE (auto capteur + systeme + appui long) ====
+(function () {
+  var THEMES = {
+    dark: {
+      bg: '#101014', earth: '#16161c', landuse: '#1b1b22', park: '#1f2518', water: '#12283d',
+      road: '#2a2a35', roadMajor: '#3a3a45', text: '#e0e0e0', textHalo: '#101014'
+    },
+    light: {
+      bg: '#f5f5f5', earth: '#ffffff', landuse: '#e8e8e8', park: '#d4e8c4', water: '#a8d5e8',
+      road: '#d0d0d0', roadMajor: '#b0b0b0', text: '#333333', textHalo: '#ffffff'
+    }
+  };
+  var KEY = 'themeMode';
+  var current = localStorage.getItem(KEY) || 'dark';
+  var layersBackup = null;
+  var manualOverride = null;
+  var lastLux = -1;
+  var lastThemeChange = 0;
+  var DEBOUNCE_MS = 5000;
+
+  function log(msg) { console.log('[theme] ' + msg); }
+
+  function saveCustomLayers() {
+    layersBackup = { sources: {}, layers: [] };
+    var style = map.getStyle();
+    if (!style) return;
+    style.layers.forEach(function (layer) {
+      if (layer.id && (layer.id.indexOf('radar') === 0 || layer.id.indexOf('route') === 0)) {
+        layersBackup.layers.push(JSON.parse(JSON.stringify(layer)));
+      }
+    });
+    Object.keys(style.sources).forEach(function (k) {
+      if (k.indexOf('radar') === 0 || k.indexOf('route') === 0) {
+        layersBackup.sources[k] = JSON.parse(JSON.stringify(style.sources[k]));
+      }
+    });
+  }
+
+  function restoreCustomLayers() {
+    if (!layersBackup) return;
+    Object.keys(layersBackup.sources).forEach(function (k) {
+      try { if (!map.getSource(k)) map.addSource(k, layersBackup.sources[k]); }
+      catch (e) { log('addSource err ' + k + ': ' + e.message); }
+    });
+    layersBackup.layers.forEach(function (layer) {
+      try { if (!map.getLayer(layer.id)) map.addLayer(layer); }
+      catch (e) { log('addLayer err ' + layer.id + ': ' + e.message); }
+    });
+  }
+
+  function buildStyle(themeName) {
+    var t = THEMES[themeName] || THEMES.dark;
+    return {
+      version: 8,
+      sources: {
+        osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 }
+      },
+      layers: [
+        { id: 'bg', type: 'background', paint: { 'background-color': t.bg } },
+        { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-opacity': themeName === 'dark' ? 0.6 : 0.9 } }
+      ]
+    };
+  }
+
+  function applyTheme(name, source) {
+    if (name === current) return;
+    var now = Date.now();
+    if (now - lastThemeChange < DEBOUNCE_MS) {
+      log('debounce: ignore ' + name + ' (trop recent)');
+      return;
+    }
+    log('apply ' + name + ' (source: ' + (source || 'auto') + ', lux: ' + lastLux + ')');
+    saveCustomLayers();
+    current = name;
+    lastThemeChange = now;
+    try { localStorage.setItem(KEY, name); } catch (e) {}
+    map.setStyle(buildStyle(name));
+    map.once('styledata', function () {
+      setTimeout(function () {
+        restoreCustomLayers();
+        map.once('idle', function () { log('theme ' + name + ' applique + calques restaures'); });
+      }, 500);
+    });
+  }
+
+  function systemPref() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+    return 'dark';
+  }
+
+  window.__onLightChange = function (lux) {
+    if (lux == null || isNaN(lux)) return;
+    if (manualOverride && Date.now() - manualOverride.time < 5 * 60 * 1000) {
+      log('manual override actif, ignore lux ' + lux);
+      return;
+    }
+    lastLux = lux;
+    var wanted = null;
+    if (current === 'dark' && lux > 150) wanted = 'light';
+    else if (current === 'light' && lux < 50) wanted = 'dark';
+    if (wanted) {
+      log('lux ' + lux + ' -> veut ' + wanted + ' (current: ' + current + ')');
+      applyTheme(wanted, 'capteur');
+    }
+  };
+
+  var lpTimer = null;
+  document.addEventListener('touchstart', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#hud')) {
+      lpTimer = setTimeout(function () {
+        lpTimer = null;
+        var newTheme = current === 'dark' ? 'light' : 'dark';
+        applyTheme(newTheme, 'manuel');
+        manualOverride = { theme: newTheme, time: Date.now() };
+        try { if (navigator.vibrate) navigator.vibrate([40, 30, 40]); } catch (e2) {}
+      }, 600);
+    }
+  });
+  document.addEventListener('touchend', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+  document.addEventListener('touchmove', function () { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+
+  setTimeout(function () {
+    if (lastLux < 0) {
+      log('pas de capteur, applique systemPref: ' + systemPref());
+      if (current !== systemPref()) applyTheme(systemPref(), 'systeme');
+    }
+  }, 1500);
+})();
+</script>
+<script>
+// ==== NAVIGATION FLUIDE (lissage angulaire + seuil vitesse) ====
+(function () {
+  var lastPos = null, capCible = null, capLisse = null;
+  var SPEED_MIN_KMH = 12;
+  var LERP_CAP = 0.25;
+  var LERP_MAP = 0.18;
+  var DEADZONE_DEG = 1.5;
+
+  function angleDiffSigned(a, b) { return ((a - b + 540) % 360) - 180; }
+  function lerpAngle(from, to, t) { return from + angleDiffSigned(to, from) * t; }
+
+  var etaitActif = null, resetEnCours = false;
+  if (navigator.geolocation) navigator.geolocation.watchPosition(function (pos) {
+    lastPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    var v = pos.coords.speed, h = pos.coords.heading;
+    var kmh = (v != null && !isNaN(v) && v >= 0) ? v * 3.6 : 0;
+    if (h != null && !isNaN(h) && kmh >= SPEED_MIN_KMH) {
+      capCible = h;
+      if (capLisse == null) capLisse = h;
+      else capLisse = lerpAngle(capLisse, h, LERP_CAP);
+    } else if (kmh < SPEED_MIN_KMH * 0.6) {
+      capLisse = null;
+    }
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 500 });
+
+  function actif() {
+    if (!map || !map.loaded) return false;
+    if (!lastPos) return false;
+    return follow && routeMode;
+  }
+
+  function boucle() {
+    if (actif()) {
+      if (etaitActif === false) resetEnCours = false;
+      etaitActif = true;
+      var c = map.getCenter();
+      if (c.lerp) map.setCenter(c.lerp(new maplibregl.LngLat(lastPos.lng, lastPos.lat), 0.15));
+      if (capLisse != null) {
+        var diff = angleDiffSigned(capLisse, map.getBearing());
+        if (Math.abs(diff) > DEADZONE_DEG) {
+          map.setBearing(lerpAngle(map.getBearing(), capLisse, LERP_MAP));
+        }
+      }
+    } else if (resetEnCours) {
+      var d0 = angleDiffSigned(0, map.getBearing());
+      if (Math.abs(d0) > 0.5) map.setBearing(lerpAngle(map.getBearing(), 0, 0.15));
+      else resetEnCours = false;
+    }
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+})();
+</script>
+<script>
+// ==== VIBRATION NATIVE ====
+(function () {
+  if (window.AndroidVibrate) {
+    navigator.vibrate = function (pattern) {
+      try {
+        if (Array.isArray(pattern)) window.AndroidVibrate.vibratePattern(pattern.join(','));
+        else window.AndroidVibrate.vibrate(pattern || 200);
+        return true;
+      } catch (e) { return false; }
+    };
+  }
+  // Test : tape sur "Prochain radar" -> vibre + son
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#next')) {
+      navigator.vibrate([60, 40, 60]);
+    }
   });
 })();
 </script>
