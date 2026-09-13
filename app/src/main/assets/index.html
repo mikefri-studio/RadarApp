@@ -263,17 +263,14 @@ function updateHud(nearest, dist) {
 }
 function checkProximity(lat, lng) {
   var nearest = null, nearestDist = Infinity;
-  var corridor = currentHeading != null && currentKmh != null && currentKmh > 7;
+  if (window.rzUpdateSnap) window.rzUpdateSnap(lat, lng);
   for (var i = 0; i < allRadars.length; i++) {
     var r = allRadars[i];
     var d = haversine(lat, lng, r.lat, r.lng);
     if (d >= nearestDist) continue;
     if (String(r.id).indexOf('perso-') === 0 && r.sens === 'oppose') continue;
-    if (corridor) {
-      var diff = angleDiff(bearing(lat, lng, r.lat, r.lng), currentHeading);
-      if (diff > 60) continue;
-      if (d * Math.sin(diff * Math.PI / 180) > 60) continue;
-    }
+    var onRoute = window.rzIsOnMyRoute ? window.rzIsOnMyRoute(r) : null;
+    if (onRoute === false) continue;
     nearestDist = d; nearest = r;
   }
   updateHud(nearest, nearestDist);
@@ -1177,8 +1174,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
     if (window.SATELLITE) {
       return {
         version: 8,
-        sources: { esri: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256 } },
-        layers: [ { id: 'sat', type: 'raster', source: 'esri' } ]
+        sources: { esri: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256 }, esriref: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'], tileSize: 256 } },
+        layers: [ { id: 'sat', type: 'raster', source: 'esri' }, { id: 'satref', type: 'raster', source: 'esriref' } ]
       };
     }
     var t = THEMES[themeName] || THEMES.dark;
@@ -1363,6 +1360,99 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   }
   btn.onclick = function () { if (window.toggleSatellite) { window.toggleSatellite(); maj(); } };
   maj();
+})();
+</script>
+<script>
+// ==== ANALYSE DE ROUTE (Overpass snap-to-route) ====
+(function () {
+  var OVERPASS = 'https://overpass-api.de/api/interpreter';
+  var FETCH_RADIUS = 800, REFETCH_DIST = 300, REFETCH_MS = 60000, ON_ROUTE_DIST = 35;
+  var ways = [], myWay = null, myAlong = 0, myAlongPrev = 0, myDir = 1;
+  var lastFetchLat = null, lastFetchLng = null, lastFetchTime = 0, fetching = false;
+  var routeOK = false;
+
+  function distM(a, b, c, d) {
+    var R = 6371000, dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
+    var x = dLat * dLat + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*dLng*dLng;
+    return R * Math.sqrt(x);
+  }
+  function buildCum(pts) {
+    var cum = [0];
+    for (var i = 1; i < pts.length; i++) cum.push(cum[i-1] + distM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]));
+    return cum;
+  }
+  function fetchRoutes(lat, lng) {
+    if (fetching) return;
+    if (navigator.onLine === false) return;
+    fetching = true;
+    var q = '[out:json][timeout:12];way(around:' + FETCH_RADIUS + ',' + lat + ',' + lng + ')["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|motorway_link|primary_link|secondary_link|tertiary_link)$"];out geom;';
+    fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) })
+      .then(function (r) { return r.json(); })
+      .then(function (json) {
+        ways = [];
+        (json.elements || []).forEach(function (el) {
+          if (el.type === 'way' && el.geometry && el.geometry.length > 1) {
+            var pts = el.geometry.map(function (g) { return [g.lat, g.lon]; });
+            ways.push({ pts: pts, cum: buildCum(pts) });
+          }
+        });
+        routeOK = ways.length > 0;
+        lastFetchLat = lat; lastFetchLng = lng; lastFetchTime = Date.now();
+      })
+      .catch(function () { routeOK = false; })
+      .then(function () { fetching = false; });
+  }
+  function projectOnWay(w, lat, lng) {
+    var best = { dist: Infinity, along: 0 };
+    for (var i = 1; i < w.pts.length; i++) {
+      var a = w.pts[i-1], b = w.pts[i];
+      var ax = a[1], ay = a[0], bx = b[1], by = b[0], px = lng, py = lat;
+      var dx = bx - ax, dy = by - ay, L2 = dx*dx + dy*dy;
+      var t = L2 > 0 ? ((px-ax)*dx + (py-ay)*dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var d = distM(py, px, ay + t*dy, ax + t*dx);
+      var along = w.cum[i-1] + t * (w.cum[i] - w.cum[i-1]);
+      if (d < best.dist) best = { dist: d, along: along };
+    }
+    return best;
+  }
+  function updateSnap(lat, lng) {
+    var need = (lastFetchLat == null) || (Date.now() - lastFetchTime > REFETCH_MS) || (distM(lastFetchLat, lastFetchLng, lat, lng) > REFETCH_DIST);
+    if (need) fetchRoutes(lat, lng);
+    if (!routeOK || !ways.length) { myWay = null; return; }
+    var bestWay = null, bestProj = null;
+    for (var i = 0; i < ways.length; i++) {
+      var pr = projectOnWay(ways[i], lat, lng);
+      if (!bestProj || pr.dist < bestProj.dist) { bestProj = pr; bestWay = ways[i]; }
+    }
+    if (!bestWay || bestProj.dist > 40) { myWay = null; return; }
+    myWay = bestWay;
+    myAlongPrev = myAlong; myAlong = bestProj.along;
+    if (Math.abs(myAlong - myAlongPrev) > 2) myDir = (myAlong > myAlongPrev) ? 1 : -1;
+  }
+  window.rzUpdateSnap = updateSnap;
+  window.rzRouteActive = function () { return !!myWay; };
+  window.rzIsOnMyRoute = function (r) {
+    if (!myWay) return null;
+    var pr = projectOnWay(myWay, r.lat, r.lng);
+    if (pr.dist > ON_ROUTE_DIST) return false;
+    return (myDir === 1) ? (pr.along >= myAlong - 10) : (pr.along <= myAlong + 10);
+  };
+})();
+</script>
+<script>
+// ==== ZOOM INITIAL SUR MA POSITION ====
+(function () {
+  var done = false;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(function (pos) {
+    if (done) return;
+    done = true;
+    try {
+      map.setCenter([pos.coords.longitude, pos.coords.latitude]);
+      map.setZoom(16);
+    } catch (e) {}
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 5000 });
 })();
 </script>
 </body>
