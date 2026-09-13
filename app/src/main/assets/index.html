@@ -396,7 +396,9 @@ function parseCsv(text) {
   var voixActive = true;
   var annonces = {};
   function parler(txt) {
-    if (!voixActive || !window.speechSynthesis) return;
+    if (!voixActive) return;
+    if (window.AndroidTTS && window.AndroidTTS.speak) { try { window.AndroidTTS.speak(txt); return; } catch (e) {} }
+    if (!window.speechSynthesis) return;
     try {
       var u = new SpeechSynthesisUtterance(txt);
       u.lang = 'fr-FR'; u.rate = 1.05;
