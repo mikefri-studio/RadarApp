@@ -15,6 +15,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.JavascriptInterface
 import android.speech.tts.TextToSpeech
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
@@ -64,6 +68,40 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 runOnUiThread {
                     tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
                 }
+            }
+
+            @JavascriptInterface
+            fun fetchOverpass(query: String) {
+                Thread {
+                    var json = "{\"elements\":[]}"
+                    val endpoints = arrayOf(
+                        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+                        "https://overpass-api.de/api/interpreter",
+                        "https://overpass.kumi.systems/api/interpreter"
+                    )
+                    for (urlStr in endpoints) {
+                        try {
+                            val conn = URL(urlStr).openConnection() as HttpURLConnection
+                            conn.requestMethod = "POST"
+                            conn.doOutput = true
+                            conn.connectTimeout = 8000
+                            conn.readTimeout = 12000
+                            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                            val body = "data=" + java.net.URLEncoder.encode(query, "UTF-8")
+                            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                            if (conn.responseCode == 200) {
+                                json = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                                conn.disconnect()
+                                break
+                            }
+                            conn.disconnect()
+                        } catch (e: Exception) { /* essaie le suivant */ }
+                    }
+                    val safe = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+                    webView.post {
+                        webView.evaluateJavascript("window.rzOnOverpass && window.rzOnOverpass('$safe');", null)
+                    }
+                }.start()
             }
         }, "AndroidTTS")
 
