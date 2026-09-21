@@ -105,7 +105,7 @@ var map = new maplibregl.Map({
         'text-halo-width': 1
       } }
   ] },
-  center: [2.35, 48.85], zoom: 5.5
+  center: [0, 0], zoom: 2
 });
 var allRadars = [], byId = {}, userMarker = null, firstFix = true;
 var follow = true, routeMode = true, currentHeading = null;
@@ -273,6 +273,7 @@ function checkProximity(lat, lng) {
     if (onRoute === false) continue;
     nearestDist = d; nearest = r;
   }
+  window.rzNearestDist = nearest ? nearestDist : null;
   updateHud(nearest, nearestDist);
   if (nearest && nearestDist <= rzSeuilType(nearest.type)) {
     if (!alerted[nearest.id]) {
@@ -1363,30 +1364,47 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 })();
 </script>
 <script>
-// ==== ANALYSE DE ROUTE (Overpass snap-to-route) ====
+// ==== ANALYSE DE ROUTE v2 (Overpass snap-to-route, Mail.ru) ====
 (function () {
-  var OVERPASS = 'https://overpass-api.de/api/interpreter';
-  var FETCH_RADIUS = 800, REFETCH_DIST = 300, REFETCH_MS = 60000, ON_ROUTE_DIST = 35;
+  var ENDPOINTS = [
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
+  var R = 800, REFETCH_DIST = 300, REFETCH_MS = 60000, ON_ROUTE_DIST = 35;
   var ways = [], myWay = null, myAlong = 0, myAlongPrev = 0, myDir = 1;
   var lastFetchLat = null, lastFetchLng = null, lastFetchTime = 0, fetching = false;
   var routeOK = false;
 
   function distM(a, b, c, d) {
-    var R = 6371000, dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
+    var RE = 6371000, dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
     var x = dLat * dLat + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*dLng*dLng;
-    return R * Math.sqrt(x);
+    return RE * Math.sqrt(x);
   }
   function buildCum(pts) {
     var cum = [0];
     for (var i = 1; i < pts.length; i++) cum.push(cum[i-1] + distM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]));
     return cum;
   }
+  function fetchAny(urls, body) {
+    var i = 0;
+    function next() {
+      if (i >= urls.length) return Promise.reject(new Error('tous serveurs KO'));
+      var u = urls[i++];
+      window.rzDbgUrl = u;
+      return fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body, signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) { if (!r.ok) { window.rzDbgStatus = 'HTTP ' + r.status; throw new Error('HTTP ' + r.status); } window.rzDbgStatus = 'OK ' + r.status; return r; })
+        .catch(function (e) { window.rzDbgStatus = 'KO: ' + (e && e.message ? e.message : e); return next(); });
+    }
+    return next();
+  }
   function fetchRoutes(lat, lng) {
     if (fetching) return;
-    if (navigator.onLine === false) return;
+    if (navigator.onLine === false) { window.rzDbgStatus = 'OFFLINE'; return; }
     fetching = true;
-    var q = '[out:json][timeout:12];way(around:' + FETCH_RADIUS + ',' + lat + ',' + lng + ')["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|motorway_link|primary_link|secondary_link|tertiary_link)$"];out geom;';
-    fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) })
+    var q = '[out:json][timeout:8];(way["highway"](' + (lat - 0.004) + ',' + (lng - 0.006) + ',' + (lat + 0.004) + ',' + (lng + 0.006) + '););out geom;';
+    window.rzDbgStatus = 'FETCH...';
+    fetchAny(ENDPOINTS, 'data=' + encodeURIComponent(q))
       .then(function (r) { return r.json(); })
       .then(function (json) {
         ways = [];
@@ -1398,8 +1416,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
         });
         routeOK = ways.length > 0;
         lastFetchLat = lat; lastFetchLng = lng; lastFetchTime = Date.now();
+        window.rzDbgStatus = 'OK ways=' + ways.length;
       })
-      .catch(function () { routeOK = false; })
+      .catch(function (e) { routeOK = false; window.rzDbgStatus = 'FAIL: ' + (e && e.message ? e.message : e); })
       .then(function () { fetching = false; });
   }
   function projectOnWay(w, lat, lng) {
@@ -1418,7 +1437,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   }
   function updateSnap(lat, lng) {
     var need = (lastFetchLat == null) || (Date.now() - lastFetchTime > REFETCH_MS) || (distM(lastFetchLat, lastFetchLng, lat, lng) > REFETCH_DIST);
-    if (need) fetchRoutes(lat, lng);
+    if (need) { if (window.rzFetchViaKotlin) window.rzFetchViaKotlin(lat, lng); else fetchRoutes(lat, lng); }
     if (!routeOK || !ways.length) { myWay = null; return; }
     var bestWay = null, bestProj = null;
     for (var i = 0; i < ways.length; i++) {
@@ -1431,6 +1450,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
     if (Math.abs(myAlong - myAlongPrev) > 2) myDir = (myAlong > myAlongPrev) ? 1 : -1;
   }
   window.rzUpdateSnap = updateSnap;
+  window.rzWays = function () { return ways.length; };
+  window.rzSetWays = function (w) { if (!w || !w.length) { window.rzDbgStatus = 'VIDE (garde ancien)'; return; } ways = w; routeOK = true; lastFetchLat = window.rzLastFetchLat; lastFetchLng = window.rzLastFetchLng; lastFetchTime = Date.now(); };
   window.rzRouteActive = function () { return !!myWay; };
   window.rzIsOnMyRoute = function (r) {
     if (!myWay) return null;
@@ -1453,6 +1474,302 @@ input, textarea { -webkit-user-select: text; user-select: text; }
       map.setZoom(16);
     } catch (e) {}
   }, function () {}, { enableHighAccuracy: true, maximumAge: 5000 });
+})();
+</script>
+<script>
+// ==== PACK PRO : zoom continu lisse + pitch 3D + zoom contextuel radar ====
+(function () {
+  window.PRO_ZOOM = true;
+  // Neutralise les anciens sauts de zoom discrets (easeTo zoom seul)
+  var origEaseTo = map.easeTo.bind(map);
+  map.easeTo = function (o) {
+    if (window.PRO_ZOOM && o && o.zoom != null && o.center == null && o.bearing == null && o.pitch == null) return map;
+    return origEaseTo(o);
+  };
+
+  // L'utilisateur garde le controle : pinch/molette/dblclick suspend le pro-zoom 4 s
+  var userUntil = 0;
+  function userTakeover() { userUntil = Date.now() + 4000; }
+  try {
+    map.getCanvas().addEventListener('touchstart', userTakeover, { passive: true });
+    map.getCanvas().addEventListener('wheel', userTakeover, { passive: true });
+    map.on('dblclick', userTakeover);
+  } catch (e) {}
+
+  // Zoom CONTINU logarithmique (fluide, sans paliers)
+  function zoomVitesse(kmh) {
+    if (kmh == null || isNaN(kmh)) kmh = 0;
+    var z = 16.5 - 1.4 * Math.log2(1 + kmh / 12);
+    return Math.max(12, Math.min(16.5, z));
+  }
+
+  var zCur = null, pCur = 0;
+  function boucle() {
+    try {
+      if (window.follow && Date.now() > userUntil && window.mapReady) {
+        var kmh = window.currentKmh;
+        var cible = zoomVitesse(kmh);
+        // Zoom contextuel : garde le radar proche a l'ecran
+        var dR = window.rzNearestDist;
+        if (dR != null && dR > 250 && dR < 1200) cible = Math.min(cible, 13.5);
+        if (zCur == null) zCur = map.getZoom();
+        var dz = cible - zCur;
+        if (Math.abs(dz) > 0.01) { zCur += dz * 0.05; map.setZoom(zCur); }
+        // Pitch 3D effet cockpit en roulant
+        var pCible = (kmh != null && kmh >= 20) ? 55 : 0;
+        var dp = pCible - pCur;
+        if (Math.abs(dp) > 0.2) { pCur += dp * 0.06; map.setPitch(pCur); }
+        else if (pCur !== pCible) { pCur = pCible; map.setPitch(pCur); }
+      } else {
+        zCur = null;
+      }
+    } catch (e) {}
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+})();
+</script>
+<script>
+
+// ==== RECENTRAGE GARANTI v2 ====
+(function () {
+  var pos = null, n = 0;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(function (p) {
+    pos = { lng: p.coords.longitude, lat: p.coords.latitude };
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 500 });
+  function boucle() {
+    try {
+      if (pos && window.mapReady) {
+        n++;
+        if (n <= 60 || window.follow) {
+          var c = map.getCenter();
+          if (c.lerp) map.setCenter(c.lerp(new maplibregl.LngLat(pos.lng, pos.lat), 0.25));
+        }
+        if (window.userMarker) window.userMarker.setLngLat([pos.lng, pos.lat]);
+      }
+    } catch (e) {}
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+})();
+
+<script>
+// ==== DEBUG ERREURS (affiche les erreurs JS a l'ecran) ====
+(function () {
+  var box = document.createElement('div');
+  box.id = 'dbgErr';
+  box.style.cssText = 'position:fixed;left:4px;top:4px;z-index:99999;max-width:90%;background:rgba(120,0,0,.92);color:#fff;font:10px monospace;padding:6px;border-radius:6px;display:none;white-space:pre-wrap;';
+  document.body.appendChild(box);
+  var errs = [];
+  function push(msg) {
+    errs.push(msg);
+    if (errs.length > 6) errs.shift();
+    box.textContent = errs.join('\n');
+    box.style.display = 'block';
+  }
+  window.onerror = function (msg, src, line, col) {
+    push('ERR: ' + msg + ' @' + line + ':' + col);
+    return false;
+  };
+  var origErr = console.error;
+  console.error = function () {
+    push('CONSOLE: ' + Array.prototype.slice.call(arguments).join(' '));
+    origErr.apply(console, arguments);
+  };
+  window.addEventListener('unhandledrejection', function (e) {
+    push('PROMISE: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+})();
+</script>
+<script>
+// ==== BADGE DIAGNOSTIC OVERPASS ====
+(function () {
+  var b = document.createElement('div');
+  b.id = 'dbgRoute';
+  b.style.cssText = 'position:fixed;right:4px;top:60px;z-index:99998;background:rgba(0,60,120,.85);color:#fff;font:10px monospace;padding:4px 6px;border-radius:6px;';
+  document.body.appendChild(b);
+  setInterval(function () {
+    var ways = window.rzWays ? window.rzWays() : -1;
+    var snap = window.rzRouteActive ? window.rzRouteActive() : false;
+    b.textContent = 'WAYS:' + ways + ' SNAP:' + (snap ? 'OUI' : 'NON');
+  }, 1000);
+})();
+</script>
+<script>
+// ==== FORCE RECENTRAGE v3 ====
+(function () {
+  var pos = null, n = 0;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(function (p) {
+    pos = { lng: p.coords.longitude, lat: p.coords.latitude };
+    window.rzMyPos = pos;
+  }, function (e) { window.rzDbgGps = 'ERR: ' + e.message; }, { enableHighAccuracy: true, maximumAge: 500 });
+  function boucle() {
+    try {
+      if (pos && window.mapReady) {
+        n++;
+        // Force les 120 premieres frames (~2s) puis seulement si follow
+        if (n <= 120 || window.follow) {
+          map.jumpTo({ center: [pos.lng, pos.lat] });
+          if (n === 30) map.setZoom(15);
+        }
+      }
+    } catch (e) {}
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+})();
+</script>
+<script>
+// ==== DEBUG GPS SIMPLE ====
+(function () {
+  var b = document.createElement('div');
+  b.style.cssText = 'position:fixed;left:4px;bottom:80px;z-index:99999;background:rgba(200,100,0,.95);color:#fff;font:11px monospace;padding:6px;border-radius:6px;max-width:80%;';
+  b.textContent = 'GPS: attente...';
+  document.body.appendChild(b);
+  if (!navigator.geolocation) { b.textContent = 'GPS: NON SUPPORTÉ'; return; }
+  navigator.geolocation.watchPosition(
+    function (p) {
+      b.textContent = 'GPS OK: ' + p.coords.latitude.toFixed(4) + ',' + p.coords.longitude.toFixed(4) + ' (±' + Math.round(p.coords.accuracy) + 'm)';
+    },
+    function (e) {
+      b.textContent = 'GPS ERR: ' + e.message;
+    },
+    { enableHighAccuracy: true, maximumAge: 2000 }
+  );
+})();
+</script>
+<script>
+// ==== FORCE CENTRAGE GPS V4 (saut direct au premier fix) ====
+(function () {
+  var sautFait = false;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(function (p) {
+    if (sautFait || !window.mapReady) return;
+    sautFait = true;
+    try {
+      map.jumpTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 15 });
+      window.follow = true;
+      if (window.updateBtns) window.updateBtns();
+    } catch (e) {}
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 500 });
+})();
+</script>
+<script>
+// ==== BADGE STATUT FETCH ====
+(function () {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;right:4px;top:90px;z-index:99998;background:rgba(0,90,0,.85);color:#fff;font:10px monospace;padding:4px 6px;border-radius:6px;';
+  document.body.appendChild(d);
+  setInterval(function () {
+    d.textContent = (window.rzDbgStatus || 'init') + ' | ' + ((window.rzDbgUrl || '').split('/')[2] || '-');
+  }, 1000);
+})();
+</script>
+<script>
+// ==== OVERPASS VIA KOTLIN (pas de CORS) ====
+(function () {
+  window.rzOnOverpass = function (jsonStr) {
+    try {
+      var json = JSON.parse(jsonStr);
+      var ways = [];
+      function distM(a, b, c, d) {
+        var R = 6371000, dLat = (c-a)*Math.PI/180, dLng = (d-b)*Math.PI/180;
+        var x = dLat*dLat + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*dLng*dLng;
+        return R * Math.sqrt(x);
+      }
+      function cum(pts) { var c=[0]; for (var i=1;i<pts.length;i++) c.push(c[i-1]+distM(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1])); return c; }
+      (json.elements || []).forEach(function (el) {
+        if (el.type === 'way' && el.geometry && el.geometry.length > 1) {
+          var pts = el.geometry.map(function (g) { return [g.lat, g.lon]; });
+          ways.push({ pts: pts, cum: cum(pts) });
+        }
+      });
+      window.rzSetWays && window.rzSetWays(ways);
+      window.rzDbgStatus = 'OK ways=' + ways.length + ' (Kotlin)';
+    } catch (e) { window.rzDbgStatus = 'PARSE ERR: ' + e.message; }
+  };
+
+  // Remplace fetchRoutes pour utiliser Kotlin
+  var lastFetch = 0, fetching = false;
+  window.rzFetchViaKotlin = function (lat, lng) {
+    if (fetching) return;
+    var bridge = window.AndroidTTS || window.AndroidBridge; if (!bridge || !bridge.fetchOverpass) { window.rzDbgStatus = 'NO BRIDGE'; return; }
+    fetching = true; window.rzLastFetchLat = lat; window.rzLastFetchLng = lng;
+    window.rzDbgStatus = 'KOTLIN...';
+    var q = '[out:json][timeout:8];(way["highway"](' + (lat-0.004) + ',' + (lng-0.006) + ',' + (lat+0.004) + ',' + (lng+0.006) + '););out geom;';
+    bridge.fetchOverpass(q);
+    setTimeout(function () { fetching = false; }, 15000);
+  };
+})();
+</script>
+<script>
+// ==== MENU DEBUG (bouton coccinelle, badges caches par defaut) ====
+(function () {
+  var COLORS = ['rgba(200,100,0', 'rgba(0,60,120', 'rgba(0,90,0'];
+  function collect() {
+    var out = [];
+    var divs = document.getElementsByTagName('div');
+    for (var i = 0; i < divs.length; i++) {
+      var cs = divs[i].style.cssText || '';
+      for (var c = 0; c < COLORS.length; c++) {
+        if (cs.indexOf(COLORS[c]) >= 0) { out.push(divs[i]); break; }
+      }
+    }
+    return out;
+  }
+  function apply(show) {
+    var b = collect();
+    for (var i = 0; i < b.length; i++) b[i].style.display = show ? 'block' : 'none';
+  }
+  var btn = document.createElement('div');
+  btn.textContent = '🐞';
+  btn.style.cssText = 'position:fixed;left:4px;top:60px;z-index:99999;background:rgba(40,40,40,.85);border-radius:50%;width:36px;height:36px;line-height:36px;text-align:center;font-size:18px;';
+  document.body.appendChild(btn);
+  var show = (localStorage.getItem('rzDebug') === '1');
+  btn.addEventListener('click', function () {
+    show = !show;
+    localStorage.setItem('rzDebug', show ? '1' : '0');
+    apply(show);
+  });
+  setTimeout(function () { apply(show); }, 600);
+})();
+</script>
+<script>
+// ==== CACHE OVERPASS (recharge instantanee de ta zone) ====
+(function () {
+  var orig = window.rzOnOverpass;
+  window.rzOnOverpass = function (jsonStr) {
+    try {
+      if (window.rzLastFetchLat != null) {
+        localStorage.setItem('rzWaysCache', JSON.stringify({ lat: window.rzLastFetchLat, lng: window.rzLastFetchLng, raw: jsonStr }));
+      }
+    } catch (e) {}
+    return orig(jsonStr);
+  };
+
+  function distM(a, b, c, d) {
+    var R = 6371000, dLat = (c-a)*Math.PI/180, dLng = (d-b)*Math.PI/180;
+    var x = dLat*dLat + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*dLng*dLng;
+    return R * Math.sqrt(x);
+  }
+
+  var done = false;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(function (p) {
+    if (done) return;
+    done = true;
+    var lat = p.coords.latitude, lng = p.coords.longitude;
+    try {
+      var c = JSON.parse(localStorage.getItem('rzWaysCache') || 'null');
+      if (c && c.raw && distM(c.lat, c.lng, lat, lng) < 400) {
+        window.rzOnOverpass(c.raw);
+        window.rzDbgStatus = 'CACHE charge';
+      }
+    } catch (e) {}
+    if (window.rzFetchViaKotlin) window.rzFetchViaKotlin(lat, lng);
+  }, function () {}, { enableHighAccuracy: true, maximumAge: 1000 });
 })();
 </script>
 </body>
