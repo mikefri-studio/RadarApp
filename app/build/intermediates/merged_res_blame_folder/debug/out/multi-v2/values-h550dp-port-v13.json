@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.mikefri58.radarzen.app-mergeDebugResources-38:/values-h550dp-port-v13/values-h550dp-port-v13.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\mikef\\.gradle\\caches\\8.9\\transforms\\b469e6866b7b45867ed57c79d59eb27b\\transformed\\material-1.11.0\\res\\values-h550dp-port-v13\\values-h550dp-port-v13.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "64",
+                        "endOffsets": "115"
+                    }
+                }
+            ]
+        }
+    ]
+}

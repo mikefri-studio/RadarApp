@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1A1A1E</color>
+    <string name="gcm_defaultSenderId" translatable="false">778786332416</string>
+    <string name="google_api_key" translatable="false">AIzaSyC2p1eVPyMDPD2N_FbbT4T_1tulahIpo_0</string>
+    <string name="google_app_id" translatable="false">1:778786332416:android:1312e8685514de523e5de5</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyC2p1eVPyMDPD2N_FbbT4T_1tulahIpo_0</string>
+    <string name="google_storage_bucket" translatable="false">radarzen-ae2bb.firebasestorage.app</string>
+    <string name="project_id" translatable="false">radarzen-ae2bb</string>
+    <style name="Theme.RadarZen" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

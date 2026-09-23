@@ -1,4 +1,7 @@
 package com.mikefri58.radarzen
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import android.util.Log
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -39,6 +42,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Connexion Firebase anonyme
+        Firebase.auth.signInAnonymously()
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    Log.d("RadarZen", "Connecte: " + Firebase.auth.currentUser?.uid)
+                } else {
+                    Log.e("RadarZen", "Erreur", task.exception)
+                }
+            }
         setContentView(R.layout.activity_main)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         val root = findViewById<View>(android.R.id.content)

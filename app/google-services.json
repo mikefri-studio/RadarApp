@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "778786332416",
+    "project_id": "radarzen-ae2bb",
+    "storage_bucket": "radarzen-ae2bb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:778786332416:android:1312e8685514de523e5de5",
+        "android_client_info": {
+          "package_name": "com.mikefri58.radarzen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2p1eVPyMDPD2N_FbbT4T_1tulahIpo_0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
