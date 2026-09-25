@@ -223,7 +223,8 @@
         appId: "1:778786332416:web:5c9eedfcabb1cf2c3e5de5"
     };
 
-    const ADMIN_EMAIL = "admin@radarzen.app";
+    // ✅ BON EMAIL ADMIN (celui cree dans Firebase Authentication)
+    const ADMIN_EMAIL = "mikefri.app@gmail.com";
     const ADMIN_UID = "JJ8wm4Sh7cPOX4PviA8kzxQ7x7j2";
 
     const app = initializeApp(firebaseConfig);
@@ -286,10 +287,6 @@
         authText.textContent = message;
         authBanner.className = 'visible' + (isError ? ' error' : '');
         authBanner.classList.add('visible');
-    }
-    
-    function hideAuthBanner() {
-        authBanner.classList.remove('visible');
     }
 
     window.logout = async function() {
