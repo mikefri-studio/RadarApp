@@ -9,41 +9,96 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
         * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; }
-        .container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 800px; }
-        h2 { text-align: center; color: #333; margin-top: 0; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; transition: border 0.3s; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background: #f0f2f5;
+        }
+        /* Conteneur pleine largeur */
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 98%;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        h2 { text-align: center; color: #333; margin: 0 0 10px 0; }
+        
+        /* === DISPOSITION 2 COLONNES === */
+        .main-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 440px) 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        .form-column {
+            display: flex;
+            flex-direction: column;
+        }
+        .map-column {
+            position: sticky;
+            top: 15px;
+        }
+        #map {
+            height: calc(100vh - 140px);
+            min-height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            z-index: 1;
+        }
+        
+        /* === MOBILE / TABLETTE : retour en 1 colonne === */
+        @media (max-width: 1024px) {
+            .main-layout { grid-template-columns: 1fr; }
+            .map-column { position: static; }
+            #map { height: 450px; min-height: 400px; }
+        }
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #444; font-size: 14px; }
+        input, select {
+            width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px;
+            font-size: 14px; transition: border 0.3s;
+        }
         input:focus, select:focus { border-color: #4285F4; outline: none; }
-        .row { display: flex; gap: 15px; }
+        .row { display: flex; gap: 10px; }
         .row .form-group { flex: 1; }
-        button { width: 100%; padding: 14px; background: #4285F4; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; margin-top: 10px; }
+        button {
+            width: 100%; padding: 12px; background: #4285F4; color: white; border: none;
+            border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer;
+            transition: background 0.3s; margin-top: 8px;
+        }
         button:hover { background: #3367D6; }
         button:disabled { background: #ccc; cursor: not-allowed; }
-        #gpsBtn { background: #34A853; margin-top: 5px; margin-bottom: 15px; font-size: 14px; padding: 10px; }
+        #gpsBtn { background: #34A853; margin-top: 5px; margin-bottom: 10px; font-size: 13px; padding: 10px; }
         #gpsBtn:hover { background: #2D8E47; }
-        #map { height: 500px; width: 100%; border-radius: 8px; margin-top: 15px; border: 2px solid #e0e0e0; z-index: 1; }
         .leaflet-control-layers { border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 14px; }
-        .message { margin-top: 15px; padding: 12px; border-radius: 6px; text-align: center; display: none; font-weight: 500; }
+        .message { margin-top: 12px; padding: 10px; border-radius: 6px; text-align: center; display: none; font-weight: 500; font-size: 14px; }
         .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .hint { font-size: 13px; color: #666; margin-top: 4px; text-align: center; }
-        .map-hint { background: #e8f0fe; color: #1967d2; padding: 10px; border-radius: 6px; text-align: center; font-size: 14px; font-weight: 600; margin-bottom: 10px; border: 1px solid #d2e3fc; }
-        #customTypeGroup { display: none; margin-top: 10px; }
+        .hint { font-size: 12px; color: #666; margin-top: 3px; text-align: center; }
+        .map-hint {
+            background: #e8f0fe; color: #1967d2; padding: 8px; border-radius: 6px;
+            text-align: center; font-size: 13px; font-weight: 600; margin-top: 10px; border: 1px solid #d2e3fc;
+        }
+        #customTypeGroup { display: none; margin-top: 8px; }
         #customTypeGroup.visible { display: block; }
-        .type-info { background: #fff8e1; border-left: 4px solid #fbc02d; padding: 8px 12px; font-size: 12px; color: #5d4037; border-radius: 4px; margin-top: 6px; }
+        .type-info { background: #fff8e1; border-left: 4px solid #fbc02d; padding: 6px 10px; font-size: 11px; color: #5d4037; border-radius: 4px; margin-top: 5px; }
         .auto-number { background: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; font-weight: bold; font-size: 18px; text-align: center; cursor: not-allowed; }
-        .auto-number-info { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 8px 12px; font-size: 12px; color: #2e7d32; border-radius: 4px; margin-top: 6px; }
-        .radar-counter { display: flex; gap: 15px; justify-content: center; margin: 15px 0; flex-wrap: wrap; }
-        .counter-item { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .auto-number-info { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 6px 10px; font-size: 11px; color: #2e7d32; border-radius: 4px; margin-top: 5px; }
+        .radar-counter { display: flex; gap: 12px; justify-content: center; margin: 10px 0 15px 0; flex-wrap: wrap; }
+        .counter-item { padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .counter-csv { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
         .counter-firebase { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
         .counter-total { background: #f3e5f5; color: #6a1b9a; border: 1px solid #ce93d8; }
         .counter-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
         .dot-csv { background: #1976d2; }
         .dot-firebase { background: #d32f2f; }
-        .map-legend { background: white; padding: 10px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 13px; line-height: 1.8; }
+        .map-legend { background: white; padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.7; }
         .legend-item { display: flex; align-items: center; gap: 8px; }
         .radar-popup { font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; }
         .radar-popup h3 { margin: 0 0 8px 0; font-size: 15px; color: #1976d2; border-bottom: 2px solid #e0e0e0; padding-bottom: 6px; }
@@ -55,7 +110,7 @@
         .badge-firebase { background: #d32f2f; }
         .delete-btn { margin-top: 10px; padding: 8px 16px; background: #d32f2f; color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; width: 100%; }
         .delete-btn:hover { background: #b71c1c; }
-        #statusBar { background: #fff3cd; color: #856404; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 10px; display: none; align-items: center; gap: 10px; border: 1px solid #ffeaa7; }
+        #statusBar { background: #fff3cd; color: #856404; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; display: none; align-items: center; gap: 10px; border: 1px solid #ffeaa7; }
         #statusBar.visible { display: flex; }
         .status-spinner { border: 2px solid #f3f3f3; border-top: 2px solid #856404; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; flex-shrink: 0; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -70,46 +125,55 @@
         <div class="counter-item counter-firebase"><span class="counter-dot dot-firebase"></span><span id="firebaseCount">Firebase : 0</span></div>
         <div class="counter-item counter-total"><span id="totalCount">Total : 0</span></div>
     </div>
-    <form id="radarForm">
-        <div class="row">
-            <div class="form-group">
-                <label for="numero">Numéro de radar (auto-généré)</label>
-                <input type="text" id="numero" class="auto-number" readonly placeholder="Chargement...">
-                <div class="auto-number-info">✅ Numéro attribué automatiquement.</div>
-            </div>
-            <div class="form-group">
-                <label for="type">Type de radar</label>
-                <select id="type" required>
-                    <option value="" disabled selected>— Choisir un type —</option>
-                    <option value="ETD">🚦 Radar automatique fixe (ETD)</option>
-                    <option value="ETT">🚗 Radar embarqué / mobile (ETT)</option>
-                    <option value="ETF">🔴 Radar feu rouge (ETF)</option>
-                    <option value="ETR">🛣️ Radar de tronçon (ETR)</option>
-                    <option value="ETM">📡 Radar mobile classique (ETM)</option>
-                    <option value="ETC"> Radar passage à niveau (ETC)</option>
-                    <option value="AUTRE">⚙️ Autre (code personnalisé)</option>
-                </select>
-                <div class="type-info">💡 Le code sera conservé tel quel dans Firebase.</div>
-                <div id="customTypeGroup"><input type="text" id="customType" placeholder="Code (ex: ETZ)" maxlength="10" style="text-transform: uppercase;"></div>
-            </div>
+
+    <div class="main-layout">
+        <!-- COLONNE GAUCHE : FORMULAIRE -->
+        <div class="form-column">
+            <form id="radarForm">
+                <div class="row">
+                    <div class="form-group">
+                        <label for="numero">Numéro (auto)</label>
+                        <input type="text" id="numero" class="auto-number" readonly placeholder="...">
+                        <div class="auto-number-info">✅ Attribué automatiquement.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="type">Type de radar</label>
+                        <select id="type" required>
+                            <option value="" disabled selected>— Choisir —</option>
+                            <option value="ETD">🚦 Fixe (ETD)</option>
+                            <option value="ETT">🚗 Embarqué (ETT)</option>
+                            <option value="ETF">🔴 Feu rouge (ETF)</option>
+                            <option value="ETR">🛣️ Tronçon (ETR)</option>
+                            <option value="ETM">📡 Mobile (ETM)</option>
+                            <option value="ETC">🚂 Passage niveau (ETC)</option>
+                            <option value="AUTRE">⚙️ Autre code</option>
+                        </select>
+                        <div id="customTypeGroup"><input type="text" id="customType" placeholder="Code (ex: ETZ)" maxlength="10" style="text-transform: uppercase;"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date de mise en service</label>
+                    <input type="datetime-local" id="date" required>
+                    <div class="hint">Format JJ/MM/AAAA HH:mm dans le CSV</div>
+                </div>
+                <div class="row">
+                    <div class="form-group"><label for="vma">VMA (km/h)</label><input type="number" id="vma" required placeholder="ex: 90"></div>
+                    <div class="form-group"><label for="latitude">Latitude</label><input type="number" step="any" id="latitude" required placeholder="Clic carte !"></div>
+                    <div class="form-group"><label for="longitude">Longitude</label><input type="number" step="any" id="longitude" required placeholder="Clic carte !"></div>
+                </div>
+                <button type="button" id="gpsBtn">📍 Utiliser ma position GPS actuelle</button>
+                <button type="submit" id="submitBtn" disabled>💾 Enregistrer dans Firebase</button>
+                <div id="message" class="message"></div>
+            </form>
+            <div class="map-hint">💡 Clique sur la carte pour positionner le radar. Clique sur un marqueur rouge pour le supprimer.</div>
+            <div id="statusBar"><div class="status-spinner"></div><span id="statusText">Chargement...</span></div>
         </div>
-        <div class="form-group">
-            <label for="date">Date de mise en service</label>
-            <input type="datetime-local" id="date" required>
-            <div class="hint">Format JJ/MM/AAAA HH:mm dans le CSV</div>
+
+        <!-- COLONNE DROITE : GRANDE CARTE -->
+        <div class="map-column">
+            <div id="map"></div>
         </div>
-        <div class="row">
-            <div class="form-group"><label for="vma">VMA (km/h)</label><input type="number" id="vma" required placeholder="ex: 90"></div>
-            <div class="form-group"><label for="latitude">Latitude</label><input type="number" step="any" id="latitude" required placeholder="Clique sur la carte !"></div>
-            <div class="form-group"><label for="longitude">Longitude</label><input type="number" step="any" id="longitude" required placeholder="Clique sur la carte !"></div>
-        </div>
-        <button type="button" id="gpsBtn">📍 Utiliser ma position GPS actuelle</button>
-        <button type="submit" id="submitBtn" disabled>💾 Enregistrer dans Firebase</button>
-        <div id="message" class="message"></div>
-    </form>
-    <div class="map-hint">💡 Clique sur un marqueur rouge (Firebase) pour voir les détails et le supprimer.</div>
-    <div id="statusBar"><div class="status-spinner"></div><span id="statusText">Chargement...</span></div>
-    <div id="map"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -134,11 +198,10 @@
 
     const TYPE_NAMES = {
         "ETD": "🚦 Radar automatique fixe", "ETT": "🚗 Radar embarqué / mobile",
-        "ETF": " Radar feu rouge", "ETR": "️ Radar de tronçon",
+        "ETF": "🔴 Radar feu rouge", "ETR": "🛣️ Radar de tronçon",
         "ETM": "📡 Radar mobile classique", "ETC": "🚂 Radar passage à niveau"
     };
 
-    // Renderer Canvas pour les cercles CSV (beaucoup plus performant)
     const canvasRenderer = L.canvas({ padding: 0.5 });
 
     const map = L.map('map').setView([46.603354, 1.888334], 6);
@@ -156,14 +219,12 @@
     const satelliteWithLabels = L.layerGroup([satelliteLayer, labelsLayer]);
 
     L.control.layers({
-        "️ Plan": osmLayer,
+        "🗺️ Plan": osmLayer,
         "🛰️ Satellite": satelliteLayer,
         "🛰️ Satellite + Noms": satelliteWithLabels
     }, null, { position: 'topright' }).addTo(map);
 
-    // Groupe pour les cercles CSV (Canvas = ultra rapide)
     const csvGroup = L.layerGroup().addTo(map);
-    // Cluster pour les marqueurs Firebase (peu nombreux)
     const firebaseCluster = L.markerClusterGroup({
         maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false
     }).addTo(map);
@@ -212,7 +273,7 @@
         const radarNumber = radar["Numero de radar"] || '?';
         let delBtn = '';
         if (source === 'firebase' && docId) {
-            delBtn = `<button class="delete-btn" onclick="window.deleteRadar('${docId}','${radarNumber}')">️ Supprimer ce radar</button>`;
+            delBtn = `<button class="delete-btn" onclick="window.deleteRadar('${docId}','${radarNumber}')">🗑️ Supprimer ce radar</button>`;
         }
         return `<div class="radar-popup">
             <h3>Radar #${radarNumber} <span class="type-badge ${badgeClass}">${source.toUpperCase()}</span></h3>
@@ -240,7 +301,6 @@
         return radars;
     }
 
-    // Chargement CSV avec cercles Canvas + lots progressifs
     async function loadCSVRadars() {
         showStatus("📥 Téléchargement du CSV...");
         try {
@@ -252,33 +312,23 @@
 
             showStatus(`⏳ Affichage de ${csvCount} radars CSV...`);
 
-            // Charger par lots de 200 avec requestAnimationFrame pour ne jamais bloquer
             const BATCH = 200;
             for (let i = 0; i < radars.length; i += BATCH) {
                 const batch = radars.slice(i, Math.min(i + BATCH, radars.length));
-                
-                // Utiliser requestAnimationFrame pour laisser le navigateur respirer
                 await new Promise(resolve => requestAnimationFrame(() => {
                     batch.forEach(radar => {
                         const lat = parseFloat(radar["Latitude"]);
                         const lng = parseFloat(radar["Longitude"]);
                         const circle = L.circleMarker([lat, lng], {
-                            radius: 4,
-                            fillColor: '#1976d2',
-                            color: '#0d47a1',
-                            weight: 1,
-                            opacity: 0.8,
-                            fillOpacity: 0.6,
+                            radius: 4, fillColor: '#1976d2', color: '#0d47a1',
+                            weight: 1, opacity: 0.8, fillOpacity: 0.6,
                             renderer: canvasRenderer
                         }).bindPopup(createPopup(radar, 'csv'));
                         csvGroup.addLayer(circle);
                     });
                     resolve();
                 }));
-
                 showStatus(`⏳ ${Math.min(i + BATCH, radars.length)} / ${radars.length} radars CSV...`);
-                
-                // Petite pause entre les lots
                 await new Promise(r => setTimeout(r, 10));
             }
 
@@ -332,13 +382,11 @@
         const numeroInput = document.getElementById('numero');
         const submitBtn = document.getElementById('submitBtn');
 
-        // Firebase d'abord (rapide)
         const maxFb = await loadFirebaseRadars();
         nextRadarNumber = Math.max(4999, maxFb) + 1;
         numeroInput.value = nextRadarNumber;
         submitBtn.disabled = false;
 
-        // CSV en arrière-plan (ne bloque rien)
         loadCSVRadars();
     }
 
@@ -384,8 +432,8 @@
         if (!navigator.geolocation) { alert("Géolocalisation non supportée."); return; }
         this.textContent = "⏳ Localisation..."; this.disabled = true;
         navigator.geolocation.getCurrentPosition(
-            pos => { updatePosition(pos.coords.latitude, pos.coords.longitude); this.textContent = " Utiliser ma position GPS"; this.disabled = false; },
-            err => { alert("Erreur GPS : " + err.message); this.textContent = " Utiliser ma position GPS"; this.disabled = false; },
+            pos => { updatePosition(pos.coords.latitude, pos.coords.longitude); this.textContent = "📍 Utiliser ma position GPS"; this.disabled = false; },
+            err => { alert("Erreur GPS : " + err.message); this.textContent = "📍 Utiliser ma position GPS"; this.disabled = false; },
             { enableHighAccuracy: true, timeout: 10000 }
         );
     });
@@ -414,7 +462,7 @@
             "timestamp": Date.now()
         };
 
-        btn.disabled = true; btn.textContent = " Enregistrement...";
+        btn.disabled = true; btn.textContent = "⏳ Enregistrement...";
         try {
             const ref = await addDoc(collection(db, "radars"), data);
             msg.textContent = `✅ Radar #${nextRadarNumber} ajouté ! (ID: ${ref.id})`;
