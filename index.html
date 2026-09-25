@@ -94,7 +94,7 @@
             background-color: #2D8E47;
         }
         #map {
-            height: 450px;
+            height: 500px;
             width: 100%;
             border-radius: 8px;
             margin-top: 15px;
@@ -156,7 +156,6 @@
             border-radius: 4px;
             margin-top: 6px;
         }
-        /* Style pour le numéro auto-généré */
         .auto-number {
             background-color: #e8f5e9;
             border: 2px solid #4caf50;
@@ -175,11 +174,124 @@
             border-radius: 4px;
             margin-top: 6px;
         }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-            font-style: italic;
+        /* Compteur de radars */
+        .radar-counter {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .counter-item {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .counter-csv {
+            background-color: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #90caf9;
+        }
+        .counter-firebase {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+        .counter-total {
+            background-color: #f3e5f5;
+            color: #6a1b9a;
+            border: 1px solid #ce93d8;
+        }
+        .counter-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-csv { background-color: #1976d2; }
+        .dot-firebase { background-color: #d32f2f; }
+        /* Légende */
+        .map-legend {
+            background: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* Popup custom */
+        .radar-popup {
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .radar-popup h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: #1976d2;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 6px;
+        }
+        .radar-popup .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        .radar-popup .info-label {
+            font-weight: 600;
+            color: #555;
+        }
+        .radar-popup .info-value {
+            color: #222;
+        }
+        .radar-popup .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+        .badge-csv { background-color: #1976d2; }
+        .badge-firebase { background-color: #d32f2f; }
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            border-radius: 8px;
+            font-size: 16px;
+            color: #333;
+            font-weight: 600;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1976d2;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -187,6 +299,21 @@
 
 <div class="container">
     <h2>📍 Ajouter un nouveau radar</h2>
+    
+    <!-- Compteur de radars -->
+    <div class="radar-counter">
+        <div class="counter-item counter-csv">
+            <span class="counter-dot dot-csv"></span>
+            <span id="csvCount">CSV : 0</span>
+        </div>
+        <div class="counter-item counter-firebase">
+            <span class="counter-dot dot-firebase"></span>
+            <span id="firebaseCount">Firebase : 0</span>
+        </div>
+        <div class="counter-item counter-total">
+            <span id="totalCount">Total : 0</span>
+        </div>
+    </div>
     
     <form id="radarForm">
         <div class="row">
@@ -241,8 +368,14 @@
         <div id="message" class="message"></div>
     </form>
 
-    <div class="map-hint">💡 Astuce : Utilise le sélecteur en haut à droite pour choisir <strong>🛰️ Satellite + Noms</strong> (vue aérienne avec villes et rues), puis clique à l'endroit exact du radar.</div>
-    <div id="map"></div>
+    <div class="map-hint">💡 Clique sur un marqueur pour voir les détails. Utilise le sélecteur en haut à droite pour changer de fond de carte.</div>
+    <div style="position: relative;">
+        <div id="map"></div>
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <span>Chargement des radars...</span>
+        </div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -263,6 +396,20 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // URLs des sources de données
+    const CSV_URL = "https://raw.githubusercontent.com/mikefri-studio/RadarApp/refs/heads/master/app/src/main/assets/radars.csv";
+
+    // Correspondance des types
+    const TYPE_NAMES = {
+        "ETD": "🚦 Radar automatique fixe",
+        "ETT": "🚗 Radar embarqué / mobile",
+        "ETF": "🔴 Radar feu rouge",
+        "ETR": "🛣️ Radar de tronçon",
+        "ETM": "📡 Radar mobile classique",
+        "ETC": "🚂 Radar passage à niveau"
+    };
+
+    // Initialisation de la carte
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
     const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -288,25 +435,160 @@
     L.control.layers({
         "🗺️ Plan (Rues)": osmLayer,
         "🛰️ Satellite (Vue pure)": satelliteLayer,
-        "🛰️ Satellite + Noms (Villes & Rues)": satelliteWithLabels
+        "🛰️ Satellite + Noms": satelliteWithLabels
     }, null, { position: 'topright' }).addTo(map);
 
-    let marker = null;
-    let nextRadarNumber = 5000; // Valeur par défaut
+    // Groupes de marqueurs
+    const csvLayer = L.layerGroup().addTo(map);
+    const firebaseLayer = L.layerGroup().addTo(map);
+    let newMarker = null; // Marqueur du radar en cours de création
 
-    // Fonction pour récupérer le prochain numéro de radar
-    async function loadNextRadarNumber() {
-        const numeroInput = document.getElementById('numero');
-        const submitBtn = document.getElementById('submitBtn');
+    // Légende
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function() {
+        const div = L.DomUtil.create('div', 'map-legend');
+        div.innerHTML = `
+            <div class="legend-item"><span class="counter-dot dot-csv"></span> Radars CSV (historique)</div>
+            <div class="legend-item"><span class="counter-dot dot-firebase"></span> Radars Firebase (ajouts récents)</div>
+            <div class="legend-item"><span class="counter-dot" style="background-color: #4caf50;"></span> Radar en cours de création</div>
+        `;
+        return div;
+    };
+    legend.addTo(map);
+
+    // Compteurs
+    let csvCount = 0;
+    let firebaseCount = 0;
+
+    function updateCounters() {
+        document.getElementById('csvCount').textContent = `CSV : ${csvCount}`;
+        document.getElementById('firebaseCount').textContent = `Firebase : ${firebaseCount}`;
+        document.getElementById('totalCount').textContent = `Total : ${csvCount + firebaseCount}`;
+    }
+
+    // Création d'un popup HTML pour un radar
+    function createPopup(radar, source) {
+        const typeCode = radar["Type de radar"] || "?";
+        const typeName = TYPE_NAMES[typeCode] || typeCode;
+        const badgeClass = source === 'csv' ? 'badge-csv' : 'badge-firebase';
+        const sourceLabel = source === 'csv' ? 'CSV' : 'Firebase';
         
-        numeroInput.value = "⏳ Chargement...";
+        return `
+            <div class="radar-popup">
+                <h3>Radar #${radar["Numero de radar"] || '?'} 
+                    <span class="type-badge ${badgeClass}">${sourceLabel}</span>
+                </h3>
+                <div class="info-row">
+                    <span class="info-label">Type :</span>
+                    <span class="info-value">${typeName}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">VMA :</span>
+                    <span class="info-value">${radar["VMA"] || '?'} km/h</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Date :</span>
+                    <span class="info-value">${radar["Date de mise en service"] || '?'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Position :</span>
+                    <span class="info-value">${parseFloat(radar["Latitude"]).toFixed(4)}, ${parseFloat(radar["Longitude"]).toFixed(4)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Création d'une icône de marqueur colorée
+    function createColoredIcon(color) {
+        return L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+                background-color: ${color};
+                width: 24px;
+                height: 24px;
+                border-radius: 50% 50% 50% 0;
+                transform: rotate(-45deg);
+                border: 2px solid white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            "></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 24],
+            popupAnchor: [0, -24]
+        });
+    }
+
+    const csvIcon = createColoredIcon('#1976d2');
+    const firebaseIcon = createColoredIcon('#d32f2f');
+    const newMarkerIcon = createColoredIcon('#4caf50');
+
+    // Parser le CSV
+    function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(';').map(h => h.trim());
+        const radars = [];
         
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(';');
+            if (values.length < headers.length) continue;
+            
+            const radar = {};
+            headers.forEach((header, index) => {
+                radar[header] = values[index] ? values[index].trim() : '';
+            });
+            
+            // Valider les coordonnées
+            const lat = parseFloat(radar["Latitude"]);
+            const lng = parseFloat(radar["Longitude"]);
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                radars.push(radar);
+            }
+        }
+        return radars;
+    }
+
+    // Charger les radars depuis le CSV
+    async function loadCSVRadars() {
+        try {
+            const response = await fetch(CSV_URL);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const text = await response.text();
+            const radars = parseCSV(text);
+            
+            radars.forEach(radar => {
+                const lat = parseFloat(radar["Latitude"]);
+                const lng = parseFloat(radar["Longitude"]);
+                const marker = L.marker([lat, lng], { icon: csvIcon })
+                    .bindPopup(createPopup(radar, 'csv'));
+                csvLayer.addLayer(marker);
+            });
+            
+            csvCount = radars.length;
+            console.log(`✅ ${csvCount} radars CSV chargés`);
+        } catch (error) {
+            console.error("❌ Erreur chargement CSV:", error);
+            alert(`Impossible de charger le fichier CSV : ${error.message}`);
+        }
+    }
+
+    // Charger les radars depuis Firebase
+    async function loadFirebaseRadars() {
         try {
             const querySnapshot = await getDocs(collection(db, "radars"));
-            let maxNumber = 4999; // On commence à 4999 pour que le premier soit 5000
+            let maxNumber = 4999;
             
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
+                const lat = parseFloat(data["Latitude"]);
+                const lng = parseFloat(data["Longitude"]);
+                
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    const marker = L.marker([lat, lng], { icon: firebaseIcon })
+                        .bindPopup(createPopup(data, 'firebase'));
+                    firebaseLayer.addLayer(marker);
+                    firebaseCount++;
+                }
+                
+                // Trouver le numéro max pour l'auto-incrémentation
                 const numStr = data["Numero de radar"];
                 if (numStr) {
                     const num = parseInt(numStr, 10);
@@ -316,22 +598,49 @@
                 }
             });
             
-            nextRadarNumber = maxNumber + 1;
-            numeroInput.value = nextRadarNumber;
-            submitBtn.disabled = false; // Activer le bouton de soumission
-            
-            console.log(`Prochain numéro de radar: ${nextRadarNumber}`);
+            console.log(`✅ ${firebaseCount} radars Firebase chargés`);
+            return maxNumber;
         } catch (error) {
-            console.error("Erreur lors du chargement des numéros:", error);
-            numeroInput.value = "❌ Erreur";
-            submitBtn.disabled = true;
+            console.error("❌ Erreur chargement Firebase:", error);
+            return 4999;
         }
     }
 
-    // Charger le numéro au démarrage
-    loadNextRadarNumber();
+    // Chargement initial
+    let nextRadarNumber = 5000;
 
-    // Gestion du champ "Autre" qui apparaît dynamiquement
+    async function initializeApp() {
+        const numeroInput = document.getElementById('numero');
+        const submitBtn = document.getElementById('submitBtn');
+        const overlay = document.getElementById('loadingOverlay');
+        
+        try {
+            // Charger les deux sources en parallèle
+            const [_, maxFirebaseNumber] = await Promise.all([
+                loadCSVRadars(),
+                loadFirebaseRadars()
+            ]);
+            
+            // Déterminer le prochain numéro (max entre CSV et Firebase + 1)
+            // On prend aussi en compte les numéros du CSV au cas où
+            nextRadarNumber = Math.max(4999, maxFirebaseNumber) + 1;
+            
+            numeroInput.value = nextRadarNumber;
+            submitBtn.disabled = false;
+            updateCounters();
+            
+            // Cacher l'overlay de chargement
+            overlay.style.display = 'none';
+            
+        } catch (error) {
+            console.error("Erreur d'initialisation:", error);
+            overlay.innerHTML = '<span style="color: #c62828;">❌ Erreur de chargement</span>';
+        }
+    }
+
+    initializeApp();
+
+    // Gestion du champ "Autre"
     const typeSelect = document.getElementById('type');
     const customTypeGroup = document.getElementById('customTypeGroup');
     const customTypeInput = document.getElementById('customType');
@@ -347,6 +656,7 @@
         }
     });
 
+    // Mise à jour de la position
     function updatePosition(lat, lng, source = "carte") {
         const latInput = document.getElementById('latitude');
         const lngInput = document.getElementById('longitude');
@@ -361,10 +671,10 @@
             lngInput.style.borderColor = "#ccc";
         }, 1500);
 
-        if (marker) {
-            marker.setLatLng([lat, lng]);
+        if (newMarker) {
+            newMarker.setLatLng([lat, lng]);
         } else {
-            marker = L.marker([lat, lng]).addTo(map);
+            newMarker = L.marker([lat, lng], { icon: newMarkerIcon }).addTo(map);
         }
         
         map.setView([lat, lng], 17);
@@ -404,6 +714,7 @@
         );
     });
 
+    // Soumission du formulaire
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -433,7 +744,7 @@
         const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}`;
 
         const radarData = {
-            "Numero de radar": nextRadarNumber.toString(), // ⭐ Utiliser le numéro auto-généré
+            "Numero de radar": nextRadarNumber.toString(),
             "Type de radar": typeCode,
             "Date de mise en service": formattedDate,
             "VMA": parseInt(document.getElementById('vma').value, 10),
@@ -451,20 +762,29 @@
             messageDiv.className = 'message success';
             messageDiv.style.display = 'block';
             
-            // Incrémenter pour le prochain radar
+            // Ajouter le nouveau radar à la couche Firebase
+            const newFirebaseMarker = L.marker(
+                [radarData["Latitude"], radarData["Longitude"]], 
+                { icon: firebaseIcon }
+            ).bindPopup(createPopup(radarData, 'firebase'));
+            firebaseLayer.addLayer(newFirebaseMarker);
+            firebaseCount++;
+            updateCounters();
+            
+            // Retirer le marqueur vert "en cours"
+            if (newMarker) {
+                map.removeLayer(newMarker);
+                newMarker = null;
+            }
+            
             nextRadarNumber++;
             
             setTimeout(() => {
                 document.getElementById('radarForm').reset();
                 customTypeGroup.classList.remove('visible');
-                if (marker) {
-                    map.removeLayer(marker);
-                    marker = null;
-                }
                 map.setView([46.603354, 1.888334], 6);
                 messageDiv.style.display = 'none';
                 
-                // Mettre à jour le numéro affiché
                 document.getElementById('numero').value = nextRadarNumber;
                 submitBtn.disabled = false;
                 submitBtn.textContent = "💾 Enregistrer dans Firebase";
