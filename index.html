@@ -6,6 +6,8 @@
     <title>Ajout de Radars - RadarApp</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     
     <style>
         body {
@@ -25,314 +27,115 @@
             width: 100%;
             max-width: 800px;
         }
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-top: 0;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: #444;
-            font-size: 14px;
-        }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
         input, select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 15px;
-            transition: border 0.3s;
+            width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;
+            box-sizing: border-box; font-size: 15px; transition: border 0.3s;
         }
-        input:focus, select:focus {
-            border-color: #4285F4;
-            outline: none;
-        }
-        .row {
-            display: flex;
-            gap: 15px;
-        }
-        .row .form-group {
-            flex: 1;
-        }
+        input:focus, select:focus { border-color: #4285F4; outline: none; }
+        .row { display: flex; gap: 15px; }
+        .row .form-group { flex: 1; }
         button {
-            width: 100%;
-            padding: 14px;
-            background-color: #4285F4;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s, transform 0.1s;
-            margin-top: 10px;
+            width: 100%; padding: 14px; background-color: #4285F4; color: white;
+            border: none; border-radius: 6px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: background 0.3s, transform 0.1s; margin-top: 10px;
         }
-        button:hover {
-            background-color: #3367D6;
-        }
-        button:active {
-            transform: scale(0.98);
-        }
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        #gpsBtn {
-            background-color: #34A853;
-            margin-top: 5px;
-            margin-bottom: 15px;
-            font-size: 14px;
-            padding: 10px;
-        }
-        #gpsBtn:hover {
-            background-color: #2D8E47;
-        }
+        button:hover { background-color: #3367D6; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #gpsBtn { background-color: #34A853; margin-top: 5px; margin-bottom: 15px; font-size: 14px; padding: 10px; }
+        #gpsBtn:hover { background-color: #2D8E47; }
         #map {
-            height: 500px;
-            width: 100%;
-            border-radius: 8px;
-            margin-top: 15px;
-            border: 2px solid #e0e0e0;
-            z-index: 1;
-            cursor: crosshair;
+            height: 500px; width: 100%; border-radius: 8px; margin-top: 15px;
+            border: 2px solid #e0e0e0; z-index: 1; cursor: crosshair;
         }
         .leaflet-control-layers {
-            border-radius: 6px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
+            border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: 'Segoe UI', sans-serif; font-size: 14px;
         }
         .message {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 6px;
-            text-align: center;
-            display: none;
-            font-weight: 500;
+            margin-top: 15px; padding: 12px; border-radius: 6px;
+            text-align: center; display: none; font-weight: 500;
         }
         .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .hint {
-            font-size: 13px;
-            color: #666;
-            margin-top: 4px;
-            text-align: center;
-        }
+        .hint { font-size: 13px; color: #666; margin-top: 4px; text-align: center; }
         .map-hint {
-            background-color: #e8f0fe;
-            color: #1967d2;
-            padding: 10px;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-            border: 1px solid #d2e3fc;
+            background-color: #e8f0fe; color: #1967d2; padding: 10px; border-radius: 6px;
+            text-align: center; font-size: 14px; font-weight: 600; margin-bottom: 10px; border: 1px solid #d2e3fc;
         }
-        #customTypeGroup {
-            display: none;
-            margin-top: 10px;
-            animation: fadeIn 0.3s ease;
-        }
-        #customTypeGroup.visible {
-            display: block;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        #customTypeGroup { display: none; margin-top: 10px; animation: fadeIn 0.3s ease; }
+        #customTypeGroup.visible { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
         .type-info {
-            background-color: #fff8e1;
-            border-left: 4px solid #fbc02d;
-            padding: 8px 12px;
-            font-size: 12px;
-            color: #5d4037;
-            border-radius: 4px;
-            margin-top: 6px;
+            background-color: #fff8e1; border-left: 4px solid #fbc02d; padding: 8px 12px;
+            font-size: 12px; color: #5d4037; border-radius: 4px; margin-top: 6px;
         }
         .auto-number {
-            background-color: #e8f5e9;
-            border: 2px solid #4caf50;
-            color: #2e7d32;
-            font-weight: bold;
-            font-size: 18px;
-            text-align: center;
-            cursor: not-allowed;
+            background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32;
+            font-weight: bold; font-size: 18px; text-align: center; cursor: not-allowed;
         }
         .auto-number-info {
-            background-color: #e8f5e9;
-            border-left: 4px solid #4caf50;
-            padding: 8px 12px;
-            font-size: 12px;
-            color: #2e7d32;
-            border-radius: 4px;
-            margin-top: 6px;
+            background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 8px 12px;
+            font-size: 12px; color: #2e7d32; border-radius: 4px; margin-top: 6px;
         }
         .radar-counter {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin: 15px 0;
-            flex-wrap: wrap;
+            display: flex; gap: 15px; justify-content: center; margin: 15px 0; flex-wrap: wrap;
         }
         .counter-item {
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            padding: 8px 16px; border-radius: 20px; font-size: 13px;
+            font-weight: 600; display: flex; align-items: center; gap: 8px;
         }
-        .counter-csv {
-            background-color: #e3f2fd;
-            color: #1565c0;
-            border: 1px solid #90caf9;
-        }
-        .counter-firebase {
-            background-color: #ffebee;
-            color: #c62828;
-            border: 1px solid #ef9a9a;
-        }
-        .counter-total {
-            background-color: #f3e5f5;
-            color: #6a1b9a;
-            border: 1px solid #ce93d8;
-        }
-        .counter-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
+        .counter-csv { background-color: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+        .counter-firebase { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+        .counter-total { background-color: #f3e5f5; color: #6a1b9a; border: 1px solid #ce93d8; }
+        .counter-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
         .dot-csv { background-color: #1976d2; }
         .dot-firebase { background-color: #d32f2f; }
         .map-legend {
-            background: white;
-            padding: 10px 14px;
-            border-radius: 6px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            font-size: 13px;
-            line-height: 1.8;
+            background: white; padding: 10px 14px; border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 13px; line-height: 1.8;
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .radar-popup {
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 13px;
-            line-height: 1.5;
-        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .radar-popup { font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; }
         .radar-popup h3 {
-            margin: 0 0 8px 0;
-            font-size: 15px;
-            color: #1976d2;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 6px;
+            margin: 0 0 8px 0; font-size: 15px; color: #1976d2;
+            border-bottom: 2px solid #e0e0e0; padding-bottom: 6px;
         }
-        .radar-popup .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-        }
-        .radar-popup .info-label {
-            font-weight: 600;
-            color: #555;
-        }
-        .radar-popup .info-value {
-            color: #222;
-        }
+        .radar-popup .info-row { display: flex; justify-content: space-between; margin: 3px 0; }
+        .radar-popup .info-label { font-weight: 600; color: #555; }
+        .radar-popup .info-value { color: #222; }
         .radar-popup .type-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
-            color: white;
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; color: white;
         }
         .badge-csv { background-color: #1976d2; }
         .badge-firebase { background-color: #d32f2f; }
         .delete-btn {
-            margin-top: 10px;
-            padding: 8px 16px;
-            background-color: #d32f2f;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.3s;
+            margin-top: 10px; padding: 8px 16px; background-color: #d32f2f; color: white;
+            border: none; border-radius: 4px; font-size: 12px; font-weight: bold;
+            cursor: pointer; width: 100%; transition: background 0.3s;
         }
-        .delete-btn:hover {
-            background-color: #b71c1c;
+        .delete-btn:hover { background-color: #b71c1c; }
+        /* Bandeau de statut en haut de la carte */
+        #statusBar {
+            background-color: #fff3cd; color: #856404; padding: 8px 12px;
+            border-radius: 6px; font-size: 13px; font-weight: 600;
+            margin-bottom: 10px; display: none; align-items: center; gap: 10px;
+            border: 1px solid #ffeaa7;
         }
-        .delete-btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        /* Loading overlay simplifié */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            font-size: 18px;
-            color: #333;
-            font-weight: 600;
-        }
-        .loading-overlay.hidden {
-            display: none !important;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #1976d2;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
+        #statusBar.visible { display: flex; }
+        .status-spinner {
+            border: 2px solid #f3f3f3; border-top: 2px solid #856404;
+            border-radius: 50%; width: 16px; height: 16px;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .loading-text {
-            text-align: center;
-        }
-        .loading-progress {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #666;
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-
-<!-- Loading overlay global -->
-<div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <div class="loading-text">
-        <div>Chargement des radars...</div>
-        <div class="loading-progress" id="loadingProgress">Initialisation</div>
-    </div>
-</div>
 
 <div class="container">
     <h2>📍 Ajouter un nouveau radar</h2>
@@ -363,15 +166,14 @@
                 <select id="type" required>
                     <option value="" disabled selected>— Choisir un type —</option>
                     <option value="ETD">🚦 Radar automatique fixe (ETD)</option>
-                    <option value="ETT">🚗 Radar embarqué / mobile (ETT)</option>
+                    <option value="ETT"> Radar embarqué / mobile (ETT)</option>
                     <option value="ETF">🔴 Radar feu rouge (ETF)</option>
                     <option value="ETR">🛣️ Radar de tronçon (ETR)</option>
                     <option value="ETM">📡 Radar mobile classique (ETM)</option>
-                    <option value="ETC">🚂 Radar passage à niveau (ETC)</option>
+                    <option value="ETC"> Radar passage à niveau (ETC)</option>
                     <option value="AUTRE">⚙️ Autre (code personnalisé)</option>
                 </select>
-                <div class="type-info">💡 Le code (ex: ETD) sera conservé tel quel dans la base Firebase pour correspondre au CSV.</div>
-                
+                <div class="type-info">💡 Le code (ex: ETD) sera conservé tel quel dans la base Firebase.</div>
                 <div id="customTypeGroup">
                     <input type="text" id="customType" placeholder="Entrez le code (ex: ETZ)" maxlength="10" style="text-transform: uppercase;">
                 </div>
@@ -405,10 +207,15 @@
     </form>
 
     <div class="map-hint">💡 Clique sur un marqueur rouge (Firebase) pour voir les détails et le supprimer si nécessaire.</div>
+    <div id="statusBar">
+        <div class="status-spinner"></div>
+        <span id="statusText">Chargement en cours...</span>
+    </div>
     <div id="map"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -433,30 +240,26 @@
         "ETT": "🚗 Radar embarqué / mobile",
         "ETF": "🔴 Radar feu rouge",
         "ETR": "🛣️ Radar de tronçon",
-        "ETM": "📡 Radar mobile classique",
+        "ETM": " Radar mobile classique",
         "ETC": "🚂 Radar passage à niveau"
     };
 
-    // Initialisation de la carte IMMÉDIATEMENT
+    // === CARTE : initialisation IMMÉDIATE ===
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
     const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19
+        attribution: '&copy; OpenStreetMap', maxZoom: 19
     }).addTo(map);
 
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri',
-        maxZoom: 19
+        attribution: 'Tiles &copy; Esri', maxZoom: 19
     });
 
-    const satelliteWithLabels = L.layerGroup([
-        satelliteLayer,
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-            maxZoom: 19
-        })
-    ]);
+    const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png', {
+        attribution: '&copy; CARTO', maxZoom: 19
+    });
+
+    const satelliteWithLabels = L.layerGroup([satelliteLayer, labelsLayer]);
 
     L.control.layers({
         "🗺️ Plan (Rues)": osmLayer,
@@ -464,8 +267,21 @@
         "🛰️ Satellite + Noms": satelliteWithLabels
     }, null, { position: 'topright' }).addTo(map);
 
-    const csvLayer = L.layerGroup();
-    const firebaseLayer = L.layerGroup();
+    // === GROUPES DE MARQUEURS AVEC CLUSTERING ===
+    const csvCluster = L.markerClusterGroup({
+        maxClusterRadius: 50,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false
+    });
+    const firebaseCluster = L.markerClusterGroup({
+        maxClusterRadius: 50,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false
+    });
+    
+    map.addLayer(csvCluster);
+    map.addLayer(firebaseCluster);
+
     let newMarker = null;
 
     const legend = L.control({ position: 'bottomleft' });
@@ -489,35 +305,44 @@
         document.getElementById('totalCount').textContent = `Total : ${csvCount + firebaseCount}`;
     }
 
-    function updateLoadingProgress(text) {
-        const progressEl = document.getElementById('loadingProgress');
-        if (progressEl) {
-            progressEl.textContent = text;
+    function showStatus(text) {
+        const bar = document.getElementById('statusBar');
+        document.getElementById('statusText').textContent = text;
+        bar.classList.add('visible');
+    }
+
+    function hideStatus() {
+        document.getElementById('statusBar').classList.remove('visible');
+    }
+
+    // === FETCH AVEC TIMEOUT ===
+    async function fetchWithTimeout(url, timeout = 15000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
         }
     }
 
-    function hideLoadingOverlay() {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) {
-            overlay.classList.add('hidden');
-        }
-    }
-
+    // === SUPPRESSION ===
     async function deleteRadar(docId, marker, radarNumber) {
         if (!confirm(`⚠️ Es-tu sûr de vouloir supprimer le radar #${radarNumber} ?\n\nCette action est irréversible.`)) {
             return;
         }
-
         try {
             await deleteDoc(doc(db, "radars", docId));
-            firebaseLayer.removeLayer(marker);
+            firebaseCluster.removeLayer(marker);
             firebaseCount--;
             updateCounters();
             alert(`✅ Radar #${radarNumber} supprimé avec succès !`);
-            console.log(`Radar ${docId} supprimé`);
         } catch (error) {
-            console.error("Erreur lors de la suppression:", error);
-            alert(`❌ Erreur lors de la suppression : ${error.message}`);
+            console.error("Erreur suppression:", error);
+            alert(` Erreur : ${error.message}`);
         }
     }
 
@@ -530,34 +355,16 @@
         
         let deleteButton = '';
         if (source === 'firebase' && docId) {
-            deleteButton = `
-                <button class="delete-btn" onclick="window.deleteRadarCallback('${docId}', this, '${radarNumber}')">
-                    🗑️ Supprimer ce radar
-                </button>
-            `;
+            deleteButton = `<button class="delete-btn" onclick="window.deleteRadarCallback('${docId}', '${radarNumber}')">🗑️ Supprimer ce radar</button>`;
         }
         
         return `
             <div class="radar-popup">
-                <h3>Radar #${radarNumber} 
-                    <span class="type-badge ${badgeClass}">${sourceLabel}</span>
-                </h3>
-                <div class="info-row">
-                    <span class="info-label">Type :</span>
-                    <span class="info-value">${typeName}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">VMA :</span>
-                    <span class="info-value">${radar["VMA"] || '?'} km/h</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Date :</span>
-                    <span class="info-value">${radar["Date de mise en service"] || '?'}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Position :</span>
-                    <span class="info-value">${parseFloat(radar["Latitude"]).toFixed(4)}, ${parseFloat(radar["Longitude"]).toFixed(4)}</span>
-                </div>
+                <h3>Radar #${radarNumber} <span class="type-badge ${badgeClass}">${sourceLabel}</span></h3>
+                <div class="info-row"><span class="info-label">Type :</span><span class="info-value">${typeName}</span></div>
+                <div class="info-row"><span class="info-label">VMA :</span><span class="info-value">${radar["VMA"] || '?'} km/h</span></div>
+                <div class="info-row"><span class="info-label">Date :</span><span class="info-value">${radar["Date de mise en service"] || '?'}</span></div>
+                <div class="info-row"><span class="info-label">Position :</span><span class="info-value">${parseFloat(radar["Latitude"]).toFixed(4)}, ${parseFloat(radar["Longitude"]).toFixed(4)}</span></div>
                 ${deleteButton}
             </div>
         `;
@@ -567,16 +374,13 @@
         const lines = text.trim().split('\n');
         const headers = lines[0].split(';').map(h => h.trim());
         const radars = [];
-        
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(';');
             if (values.length < headers.length) continue;
-            
             const radar = {};
             headers.forEach((header, index) => {
                 radar[header] = values[index] ? values[index].trim() : '';
             });
-            
             const lat = parseFloat(radar["Latitude"]);
             const lng = parseFloat(radar["Longitude"]);
             if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
@@ -586,49 +390,49 @@
         return radars;
     }
 
+    // === CHARGEMENT CSV EN ARRIÈRE-PLAN ===
     async function loadCSVRadars() {
-        updateLoadingProgress("Téléchargement du fichier CSV...");
+        showStatus(" Téléchargement du fichier CSV...");
         try {
-            const response = await fetch(CSV_URL);
+            const response = await fetchWithTimeout(CSV_URL, 15000);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
-            updateLoadingProgress("Parsing du CSV...");
+            showStatus(" Analyse du CSV...");
             const text = await response.text();
             const radars = parseCSV(text);
             
-            updateLoadingProgress(`Ajout de ${radars.length} marqueurs sur la carte...`);
+            showStatus(`⏳ Ajout de ${radars.length} radars sur la carte (clustering)...`);
             
-            // Ajouter les marqueurs par lots pour ne pas bloquer l'interface
-            const batchSize = 100;
-            for (let i = 0; i < radars.length; i += batchSize) {
-                const batch = radars.slice(i, i + batchSize);
-                batch.forEach(radar => {
-                    const lat = parseFloat(radar["Latitude"]);
-                    const lng = parseFloat(radar["Longitude"]);
-                    const marker = L.marker([lat, lng])
-                        .bindPopup(createPopup(radar, 'csv'));
-                    csvLayer.addLayer(marker);
-                });
-                
-                // Laisser le navigateur respirer entre les lots
-                await new Promise(resolve => setTimeout(resolve, 0));
-                updateLoadingProgress(`Ajout des marqueurs... ${Math.min(i + batchSize, radars.length)}/${radars.length}`);
-            }
+            // Utiliser requestIdleCallback ou setTimeout pour ne pas bloquer
+            await new Promise(resolve => setTimeout(resolve, 50));
             
-            csvLayer.addTo(map);
+            // Ajouter tous les marqueurs au cluster (très rapide avec markercluster)
+            const markers = radars.map(radar => {
+                const lat = parseFloat(radar["Latitude"]);
+                const lng = parseFloat(radar["Longitude"]);
+                return L.marker([lat, lng]).bindPopup(createPopup(radar, 'csv'));
+            });
+            
+            csvCluster.addLayers(markers);
             csvCount = radars.length;
+            
             console.log(`✅ ${csvCount} radars CSV chargés`);
+            showStatus(`✅ ${csvCount} radars CSV chargés`);
+            setTimeout(hideStatus, 2000);
         } catch (error) {
-            console.error("❌ Erreur chargement CSV:", error);
-            alert(`Impossible de charger le fichier CSV : ${error.message}`);
+            console.error(" Erreur chargement CSV:", error);
+            showStatus(`❌ Erreur CSV : ${error.message}`);
+            setTimeout(hideStatus, 5000);
         }
     }
 
+    // === CHARGEMENT FIREBASE ===
     async function loadFirebaseRadars() {
-        updateLoadingProgress("Chargement des radars Firebase...");
+        showStatus(" Chargement des radars Firebase...");
         try {
             const querySnapshot = await getDocs(collection(db, "radars"));
             let maxNumber = 4999;
+            const markers = [];
             
             querySnapshot.forEach((docSnapshot) => {
                 const data = docSnapshot.data();
@@ -640,25 +444,24 @@
                     const marker = L.marker([lat, lng]);
                     marker.bindPopup(createPopup(data, 'firebase', docId));
                     marker._docId = docId;
-                    marker._radarData = data;
-                    firebaseLayer.addLayer(marker);
+                    markers.push(marker);
                     firebaseCount++;
                 }
                 
                 const numStr = data["Numero de radar"];
                 if (numStr) {
                     const num = parseInt(numStr, 10);
-                    if (!isNaN(num) && num > maxNumber) {
-                        maxNumber = num;
-                    }
+                    if (!isNaN(num) && num > maxNumber) maxNumber = num;
                 }
             });
             
-            firebaseLayer.addTo(map);
+            firebaseCluster.addLayers(markers);
             console.log(`✅ ${firebaseCount} radars Firebase chargés`);
             return maxNumber;
         } catch (error) {
             console.error("❌ Erreur chargement Firebase:", error);
+            showStatus(` Erreur Firebase : ${error.message}`);
+            setTimeout(hideStatus, 5000);
             return 4999;
         }
     }
@@ -669,45 +472,36 @@
         const numeroInput = document.getElementById('numero');
         const submitBtn = document.getElementById('submitBtn');
         
-        try {
-            // Charger Firebase d'abord (plus rapide)
-            const maxFirebaseNumber = await loadFirebaseRadars();
-            
-            // Puis charger le CSV
-            await loadCSVRadars();
-            
-            nextRadarNumber = Math.max(4999, maxFirebaseNumber) + 1;
-            
-            numeroInput.value = nextRadarNumber;
-            submitBtn.disabled = false;
-            updateCounters();
-            
-            hideLoadingOverlay();
-            
-        } catch (error) {
-            console.error("Erreur d'initialisation:", error);
-            hideLoadingOverlay();
-            alert(`Erreur lors du chargement : ${error.message}`);
-        }
+        // Charger Firebase en premier (rapide)
+        const maxFirebaseNumber = await loadFirebaseRadars();
+        
+        // Activer le formulaire immédiatement
+        nextRadarNumber = Math.max(4999, maxFirebaseNumber) + 1;
+        numeroInput.value = nextRadarNumber;
+        submitBtn.disabled = false;
+        updateCounters();
+        
+        // Charger le CSV en arrière-plan (ne bloque plus rien)
+        loadCSVRadars();
     }
 
-    window.deleteRadarCallback = async function(docId, button, radarNumber) {
+    // Callback global pour la suppression
+    window.deleteRadarCallback = async function(docId, radarNumber) {
         let targetMarker = null;
-        firebaseLayer.eachLayer(layer => {
-            if (layer._docId === docId) {
-                targetMarker = layer;
-            }
+        firebaseCluster.eachLayer(layer => {
+            if (layer._docId === docId) targetMarker = layer;
         });
-        
         if (targetMarker) {
             await deleteRadar(docId, targetMarker, radarNumber);
         } else {
-            alert('❌ Marqueur introuvable');
+            alert(' Marqueur introuvable');
         }
     };
 
+    // Lancer l'initialisation
     initializeApp();
 
+    // === GESTION DU FORMULAIRE ===
     const typeSelect = document.getElementById('type');
     const customTypeGroup = document.getElementById('customTypeGroup');
     const customTypeInput = document.getElementById('customType');
@@ -726,10 +520,8 @@
     function updatePosition(lat, lng, source = "carte") {
         const latInput = document.getElementById('latitude');
         const lngInput = document.getElementById('longitude');
-        
         latInput.value = lat.toFixed(6);
         lngInput.value = lng.toFixed(6);
-
         latInput.style.borderColor = "#34A853";
         lngInput.style.borderColor = "#34A853";
         setTimeout(() => {
@@ -742,9 +534,7 @@
         } else {
             newMarker = L.marker([lat, lng]).addTo(map);
         }
-        
         map.setView([lat, lng], 17);
-        console.log(`Position mise à jour via ${source}:`, lat, lng);
     }
 
     map.on('click', function(e) {
@@ -756,13 +546,11 @@
             alert("La géolocalisation n'est pas supportée par votre navigateur.");
             return;
         }
-
-        this.textContent = "⏳ Localisation en cours...";
+        this.textContent = " Localisation en cours...";
         this.disabled = true;
-
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                updatePosition(position.coords.latitude, position.coords.longitude, "GPS appareil");
+                updatePosition(position.coords.latitude, position.coords.longitude, "GPS");
                 this.textContent = "📍 Utiliser ma position GPS actuelle";
                 this.disabled = false;
             },
@@ -771,9 +559,8 @@
                 if (error.code === 1) errorMsg = "Veuillez autoriser l'accès à la localisation.";
                 if (error.code === 2) errorMsg = "Position indisponible.";
                 if (error.code === 3) errorMsg = "Délai d'attente dépassé.";
-                
                 alert(errorMsg);
-                this.textContent = "📍 Utiliser ma position GPS actuelle";
+                this.textContent = " Utiliser ma position GPS actuelle";
                 this.disabled = false;
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -782,7 +569,6 @@
 
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
         const messageDiv = document.getElementById('message');
         const submitBtn = document.getElementById('submitBtn');
         messageDiv.style.display = 'none';
@@ -830,9 +616,7 @@
             const newFirebaseMarker = L.marker([radarData["Latitude"], radarData["Longitude"]]);
             newFirebaseMarker.bindPopup(createPopup(radarData, 'firebase', docRef.id));
             newFirebaseMarker._docId = docRef.id;
-            newFirebaseMarker._radarData = radarData;
-            
-            firebaseLayer.addLayer(newFirebaseMarker);
+            firebaseCluster.addLayer(newFirebaseMarker);
             firebaseCount++;
             updateCounters();
             
@@ -848,7 +632,6 @@
                 customTypeGroup.classList.remove('visible');
                 map.setView([46.603354, 1.888334], 6);
                 messageDiv.style.display = 'none';
-                
                 document.getElementById('numero').value = nextRadarNumber;
                 submitBtn.disabled = false;
                 submitBtn.textContent = "💾 Enregistrer dans Firebase";
