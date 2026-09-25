@@ -174,7 +174,6 @@
             border-radius: 4px;
             margin-top: 6px;
         }
-        /* Compteur de radars */
         .radar-counter {
             display: flex;
             gap: 15px;
@@ -214,7 +213,6 @@
         }
         .dot-csv { background-color: #1976d2; }
         .dot-firebase { background-color: #d32f2f; }
-        /* Légende */
         .map-legend {
             background: white;
             padding: 10px 14px;
@@ -228,7 +226,6 @@
             align-items: center;
             gap: 8px;
         }
-        /* Popup custom */
         .radar-popup {
             font-family: 'Segoe UI', sans-serif;
             font-size: 13px;
@@ -263,7 +260,27 @@
         }
         .badge-csv { background-color: #1976d2; }
         .badge-firebase { background-color: #d32f2f; }
-        /* Loading overlay */
+        /* Bouton de suppression dans le popup */
+        .delete-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #d32f2f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.3s;
+        }
+        .delete-btn:hover {
+            background-color: #b71c1c;
+        }
+        .delete-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -300,7 +317,6 @@
 <div class="container">
     <h2>📍 Ajouter un nouveau radar</h2>
     
-    <!-- Compteur de radars -->
     <div class="radar-counter">
         <div class="counter-item counter-csv">
             <span class="counter-dot dot-csv"></span>
@@ -368,7 +384,7 @@
         <div id="message" class="message"></div>
     </form>
 
-    <div class="map-hint">💡 Clique sur un marqueur pour voir les détails. Utilise le sélecteur en haut à droite pour changer de fond de carte.</div>
+    <div class="map-hint">💡 Clique sur un marqueur rouge (Firebase) pour voir les détails et le supprimer si nécessaire.</div>
     <div style="position: relative;">
         <div id="map"></div>
         <div id="loadingOverlay" class="loading-overlay">
@@ -382,7 +398,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAESYQeZY2bczUK1CqzJyV77G74C1jrMCI",
@@ -396,10 +412,8 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // URLs des sources de données
     const CSV_URL = "https://raw.githubusercontent.com/mikefri-studio/RadarApp/refs/heads/master/app/src/main/assets/radars.csv";
 
-    // Correspondance des types
     const TYPE_NAMES = {
         "ETD": "🚦 Radar automatique fixe",
         "ETT": "🚗 Radar embarqué / mobile",
@@ -409,7 +423,6 @@
         "ETC": "🚂 Radar passage à niveau"
     };
 
-    // Initialisation de la carte
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
     const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -438,12 +451,10 @@
         "🛰️ Satellite + Noms": satelliteWithLabels
     }, null, { position: 'topright' }).addTo(map);
 
-    // Groupes de marqueurs
     const csvLayer = L.layerGroup().addTo(map);
     const firebaseLayer = L.layerGroup().addTo(map);
-    let newMarker = null; // Marqueur du radar en cours de création
+    let newMarker = null;
 
-    // Légende
     const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = function() {
         const div = L.DomUtil.create('div', 'map-legend');
@@ -456,7 +467,6 @@
     };
     legend.addTo(map);
 
-    // Compteurs
     let csvCount = 0;
     let firebaseCount = 0;
 
@@ -466,16 +476,48 @@
         document.getElementById('totalCount').textContent = `Total : ${csvCount + firebaseCount}`;
     }
 
+    // Fonction de suppression d'un radar
+    async function deleteRadar(docId, marker, radarNumber) {
+        if (!confirm(`⚠️ Es-tu sûr de vouloir supprimer le radar #${radarNumber} ?\n\nCette action est irréversible.`)) {
+            return;
+        }
+
+        try {
+            await deleteDoc(doc(db, "radars", docId));
+            
+            // Retirer le marqueur de la carte
+            firebaseLayer.removeLayer(marker);
+            firebaseCount--;
+            updateCounters();
+            
+            alert(`✅ Radar #${radarNumber} supprimé avec succès !`);
+            console.log(`Radar ${docId} supprimé`);
+        } catch (error) {
+            console.error("Erreur lors de la suppression:", error);
+            alert(`❌ Erreur lors de la suppression : ${error.message}`);
+        }
+    }
+
     // Création d'un popup HTML pour un radar
-    function createPopup(radar, source) {
+    function createPopup(radar, source, docId = null) {
         const typeCode = radar["Type de radar"] || "?";
         const typeName = TYPE_NAMES[typeCode] || typeCode;
         const badgeClass = source === 'csv' ? 'badge-csv' : 'badge-firebase';
         const sourceLabel = source === 'csv' ? 'CSV' : 'Firebase';
+        const radarNumber = radar["Numero de radar"] || '?';
+        
+        let deleteButton = '';
+        if (source === 'firebase' && docId) {
+            deleteButton = `
+                <button class="delete-btn" onclick="window.deleteRadarCallback('${docId}', this, '${radarNumber}')">
+                    🗑️ Supprimer ce radar
+                </button>
+            `;
+        }
         
         return `
             <div class="radar-popup">
-                <h3>Radar #${radar["Numero de radar"] || '?'} 
+                <h3>Radar #${radarNumber} 
                     <span class="type-badge ${badgeClass}">${sourceLabel}</span>
                 </h3>
                 <div class="info-row">
@@ -494,11 +536,11 @@
                     <span class="info-label">Position :</span>
                     <span class="info-value">${parseFloat(radar["Latitude"]).toFixed(4)}, ${parseFloat(radar["Longitude"]).toFixed(4)}</span>
                 </div>
+                ${deleteButton}
             </div>
         `;
     }
 
-    // Création d'une icône de marqueur colorée
     function createColoredIcon(color) {
         return L.divIcon({
             className: 'custom-marker',
@@ -521,7 +563,6 @@
     const firebaseIcon = createColoredIcon('#d32f2f');
     const newMarkerIcon = createColoredIcon('#4caf50');
 
-    // Parser le CSV
     function parseCSV(text) {
         const lines = text.trim().split('\n');
         const headers = lines[0].split(';').map(h => h.trim());
@@ -536,7 +577,6 @@
                 radar[header] = values[index] ? values[index].trim() : '';
             });
             
-            // Valider les coordonnées
             const lat = parseFloat(radar["Latitude"]);
             const lng = parseFloat(radar["Longitude"]);
             if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
@@ -546,7 +586,6 @@
         return radars;
     }
 
-    // Charger les radars depuis le CSV
     async function loadCSVRadars() {
         try {
             const response = await fetch(CSV_URL);
@@ -570,25 +609,29 @@
         }
     }
 
-    // Charger les radars depuis Firebase
     async function loadFirebaseRadars() {
         try {
             const querySnapshot = await getDocs(collection(db, "radars"));
             let maxNumber = 4999;
             
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
+            querySnapshot.forEach((docSnapshot) => {
+                const data = docSnapshot.data();
+                const docId = docSnapshot.id;
                 const lat = parseFloat(data["Latitude"]);
                 const lng = parseFloat(data["Longitude"]);
                 
                 if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                    const marker = L.marker([lat, lng], { icon: firebaseIcon })
-                        .bindPopup(createPopup(data, 'firebase'));
+                    const marker = L.marker([lat, lng], { icon: firebaseIcon });
+                    marker.bindPopup(createPopup(data, 'firebase', docId));
+                    
+                    // Stocker les références pour la suppression
+                    marker._docId = docId;
+                    marker._radarData = data;
+                    
                     firebaseLayer.addLayer(marker);
                     firebaseCount++;
                 }
                 
-                // Trouver le numéro max pour l'auto-incrémentation
                 const numStr = data["Numero de radar"];
                 if (numStr) {
                     const num = parseInt(numStr, 10);
@@ -606,7 +649,6 @@
         }
     }
 
-    // Chargement initial
     let nextRadarNumber = 5000;
 
     async function initializeApp() {
@@ -615,21 +657,17 @@
         const overlay = document.getElementById('loadingOverlay');
         
         try {
-            // Charger les deux sources en parallèle
             const [_, maxFirebaseNumber] = await Promise.all([
                 loadCSVRadars(),
                 loadFirebaseRadars()
             ]);
             
-            // Déterminer le prochain numéro (max entre CSV et Firebase + 1)
-            // On prend aussi en compte les numéros du CSV au cas où
             nextRadarNumber = Math.max(4999, maxFirebaseNumber) + 1;
             
             numeroInput.value = nextRadarNumber;
             submitBtn.disabled = false;
             updateCounters();
             
-            // Cacher l'overlay de chargement
             overlay.style.display = 'none';
             
         } catch (error) {
@@ -638,9 +676,25 @@
         }
     }
 
+    // Rendre la fonction de suppression accessible globalement pour les boutons du popup
+    window.deleteRadarCallback = async function(docId, button, radarNumber) {
+        // Trouver le marqueur correspondant
+        let targetMarker = null;
+        firebaseLayer.eachLayer(layer => {
+            if (layer._docId === docId) {
+                targetMarker = layer;
+            }
+        });
+        
+        if (targetMarker) {
+            await deleteRadar(docId, targetMarker, radarNumber);
+        } else {
+            alert('❌ Marqueur introuvable');
+        }
+    };
+
     initializeApp();
 
-    // Gestion du champ "Autre"
     const typeSelect = document.getElementById('type');
     const customTypeGroup = document.getElementById('customTypeGroup');
     const customTypeInput = document.getElementById('customType');
@@ -656,7 +710,6 @@
         }
     });
 
-    // Mise à jour de la position
     function updatePosition(lat, lng, source = "carte") {
         const latInput = document.getElementById('latitude');
         const lngInput = document.getElementById('longitude');
@@ -714,7 +767,6 @@
         );
     });
 
-    // Soumission du formulaire
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -762,16 +814,18 @@
             messageDiv.className = 'message success';
             messageDiv.style.display = 'block';
             
-            // Ajouter le nouveau radar à la couche Firebase
             const newFirebaseMarker = L.marker(
                 [radarData["Latitude"], radarData["Longitude"]], 
                 { icon: firebaseIcon }
-            ).bindPopup(createPopup(radarData, 'firebase'));
+            );
+            newFirebaseMarker.bindPopup(createPopup(radarData, 'firebase', docRef.id));
+            newFirebaseMarker._docId = docRef.id;
+            newFirebaseMarker._radarData = radarData;
+            
             firebaseLayer.addLayer(newFirebaseMarker);
             firebaseCount++;
             updateCounters();
             
-            // Retirer le marqueur vert "en cours"
             if (newMarker) {
                 map.removeLayer(newMarker);
                 newMarker = null;
