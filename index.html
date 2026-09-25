@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ajout de Radars - RadarZen</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
         * { box-sizing: border-box; }
         body {
@@ -196,7 +194,7 @@
                 <button type="submit" id="submitBtn" disabled>💾 Enregistrer dans Firebase</button>
                 <div id="message" class="message"></div>
             </form>
-            <div class="map-hint">💡 Clique sur la carte pour positionner le radar. Clique sur un marqueur rouge pour le supprimer.</div>
+            <div class="map-hint">💡 Clique sur la carte pour positionner le radar. Clique sur un point rouge pour le supprimer.</div>
             <div id="statusBar"><div class="status-spinner"></div><span id="statusText">Chargement...</span></div>
         </div>
 
@@ -207,7 +205,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -223,7 +220,6 @@
         appId: "1:778786332416:web:5c9eedfcabb1cf2c3e5de5"
     };
 
-    // ✅ BON EMAIL ADMIN (celui cree dans Firebase Authentication)
     const ADMIN_EMAIL = "mikefri.app@gmail.com";
     const ADMIN_UID = "JJ8wm4Sh7cPOX4PviA8kzxQ7x7j2";
 
@@ -236,6 +232,20 @@
         "ETD": "🚦 Radar automatique fixe", "ETT": "🚗 Radar embarqué / mobile",
         "ETF": "🔴 Radar feu rouge", "ETR": "🛣️ Radar de tronçon",
         "ETM": "📡 Radar mobile classique", "ETC": "🚂 Radar passage à niveau"
+    };
+
+    // Styles des points
+    const STYLE_CSV = {
+        radius: 4, fillColor: '#1976d2', color: '#0d47a1',
+        weight: 1, opacity: 0.8, fillOpacity: 0.6
+    };
+    const STYLE_FIREBASE = {
+        radius: 7, fillColor: '#d32f2f', color: '#ffffff',
+        weight: 2, opacity: 1, fillOpacity: 0.9
+    };
+    const STYLE_NEW = {
+        radius: 9, fillColor: '#4caf50', color: '#ffffff',
+        weight: 2, opacity: 1, fillOpacity: 0.9
     };
 
     const canvasRenderer = L.canvas({ padding: 0.5 });
@@ -260,9 +270,7 @@
     }, null, { position: 'topright' }).addTo(map);
 
     const csvGroup = L.layerGroup().addTo(map);
-    const firebaseCluster = L.markerClusterGroup({
-        maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false
-    }).addTo(map);
+    const firebaseGroup = L.layerGroup().addTo(map);
 
     let newMarker = null;
     let csvCount = 0, firebaseCount = 0;
@@ -271,9 +279,9 @@
     legend.onAdd = function() {
         const div = L.DomUtil.create('div', 'map-legend');
         div.innerHTML = `
-            <div class="legend-item"><span class="counter-dot dot-csv"></span> Radars CSV (cercles bleus)</div>
-            <div class="legend-item"><span class="counter-dot dot-firebase"></span> Radars Firebase (marqueurs rouges)</div>
-            <div class="legend-item"><span class="counter-dot" style="background:#4caf50;"></span> Radar en cours</div>
+            <div class="legend-item"><span class="counter-dot dot-csv"></span> Radars CSV (points bleus)</div>
+            <div class="legend-item"><span class="counter-dot dot-firebase"></span> Radars Firebase (points rouges)</div>
+            <div class="legend-item"><span class="counter-dot" style="background:#4caf50;"></span> Radar en cours (vert)</div>
         `;
         return div;
     };
@@ -307,7 +315,6 @@
                     resolve(false);
                     unsub();
                 } else {
-                    // Pas connecte : demander le mot de passe
                     const pwd = prompt("🔐 Mot de passe admin RadarZen :");
                     if (pwd) {
                         try {
@@ -355,7 +362,6 @@
         const badgeClass = source === 'csv' ? 'badge-csv' : 'badge-firebase';
         const radarNumber = radar["Numero de radar"] || '?';
         let delBtn = '';
-        // Bouton suppr seulement si admin connecte
         if (source === 'firebase' && docId && auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
             delBtn = `<button class="delete-btn" onclick="window.deleteRadar('${docId}','${radarNumber}')">🗑️ Supprimer ce radar</button>`;
         }
@@ -404,9 +410,7 @@
                         const lat = parseFloat(radar["Latitude"]);
                         const lng = parseFloat(radar["Longitude"]);
                         const circle = L.circleMarker([lat, lng], {
-                            radius: 4, fillColor: '#1976d2', color: '#0d47a1',
-                            weight: 1, opacity: 0.8, fillOpacity: 0.6,
-                            renderer: canvasRenderer
+                            ...STYLE_CSV, renderer: canvasRenderer
                         }).bindPopup(createPopup(radar, 'csv'));
                         csvGroup.addLayer(circle);
                     });
@@ -431,7 +435,6 @@
         try {
             const snapshot = await getDocs(collection(db, "radars"));
             let maxNumber = 4999;
-            const markers = [];
 
             snapshot.forEach(ds => {
                 const data = ds.data();
@@ -439,17 +442,19 @@
                 const lat = parseFloat(data["Latitude"]);
                 const lng = parseFloat(data["Longitude"]);
                 if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                    const m = L.marker([lat, lng]);
+                    // POINT ROUGE au lieu du marqueur-epingle
+                    const m = L.circleMarker([lat, lng], {
+                        ...STYLE_FIREBASE, renderer: canvasRenderer
+                    });
                     m.bindPopup(createPopup(data, 'firebase', docId));
                     m._docId = docId;
-                    markers.push(m);
+                    firebaseGroup.addLayer(m);
                     firebaseCount++;
                 }
                 const num = parseInt(data["Numero de radar"], 10);
                 if (!isNaN(num) && num > maxNumber) maxNumber = num;
             });
 
-            firebaseCluster.addLayers(markers);
             updateCounters();
             return maxNumber;
         } catch (error) {
@@ -467,14 +472,12 @@
         const numeroInput = document.getElementById('numero');
         const submitBtn = document.getElementById('submitBtn');
 
-        // Authentification admin
         isAdmin = await ensureLoggedIn();
 
         const maxFb = await loadFirebaseRadars();
         nextRadarNumber = Math.max(4999, maxFb) + 1;
         numeroInput.value = nextRadarNumber;
         
-        // Activer le bouton seulement si admin
         if (isAdmin) {
             submitBtn.disabled = false;
         } else {
@@ -493,8 +496,8 @@
         if (!confirm(`⚠️ Supprimer le radar #${radarNumber} ?\nAction irréversible.`)) return;
         try {
             await deleteDoc(doc(db, "radars", docId));
-            firebaseCluster.eachLayer(layer => {
-                if (layer._docId === docId) firebaseCluster.removeLayer(layer);
+            firebaseGroup.eachLayer(layer => {
+                if (layer._docId === docId) firebaseGroup.removeLayer(layer);
             });
             firebaseCount--;
             updateCounters();
@@ -521,7 +524,11 @@
         lngInput.style.borderColor = "#34A853";
         setTimeout(() => { latInput.style.borderColor = "#ccc"; lngInput.style.borderColor = "#ccc"; }, 1500);
         if (newMarker) newMarker.setLatLng([lat, lng]);
-        else newMarker = L.marker([lat, lng]).addTo(map);
+        else {
+            newMarker = L.circleMarker([lat, lng], {
+                ...STYLE_NEW, renderer: canvasRenderer
+            }).addTo(map);
+        }
         map.setView([lat, lng], 17);
     }
 
@@ -573,10 +580,13 @@
             msg.textContent = `✅ Radar #${nextRadarNumber} ajouté ! (ID: ${ref.id})`;
             msg.className = 'message success'; msg.style.display = 'block';
 
-            const m = L.marker([data["Latitude"], data["Longitude"]]);
+            // POINT ROUGE pour le nouveau radar
+            const m = L.circleMarker([data["Latitude"], data["Longitude"]], {
+                ...STYLE_FIREBASE, renderer: canvasRenderer
+            });
             m.bindPopup(createPopup(data, 'firebase', ref.id));
             m._docId = ref.id;
-            firebaseCluster.addLayer(m);
+            firebaseGroup.addLayer(m);
             firebaseCount++; updateCounters();
 
             if (newMarker) { map.removeLayer(newMarker); newMarker = null; }
