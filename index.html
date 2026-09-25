@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ajout de Radars - RadarZen</title>
+    <title>Admin RadarZen - Radars & Signalements</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; }
@@ -24,21 +24,14 @@
         }
         h2 { text-align: center; color: #333; margin: 0 0 10px 0; }
         
-        /* === DISPOSITION 2 COLONNES === */
         .main-layout {
             display: grid;
             grid-template-columns: minmax(360px, 440px) 1fr;
             gap: 20px;
             align-items: start;
         }
-        .form-column {
-            display: flex;
-            flex-direction: column;
-        }
-        .map-column {
-            position: sticky;
-            top: 15px;
-        }
+        .form-column { display: flex; flex-direction: column; }
+        .map-column { position: sticky; top: 15px; }
         #map {
             height: calc(100vh - 140px);
             min-height: 500px;
@@ -85,16 +78,21 @@
         #customTypeGroup.visible { display: block; }
         .auto-number { background: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; font-weight: bold; font-size: 18px; text-align: center; cursor: not-allowed; }
         .auto-number-info { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 6px 10px; font-size: 11px; color: #2e7d32; border-radius: 4px; margin-top: 5px; }
-        .radar-counter { display: flex; gap: 12px; justify-content: center; margin: 10px 0 15px 0; flex-wrap: wrap; }
-        .counter-item { padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        
+        .radar-counter { display: flex; gap: 10px; justify-content: center; margin: 10px 0 15px 0; flex-wrap: wrap; }
+        .counter-item { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
         .counter-csv { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
         .counter-firebase { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+        .counter-reports { background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; }
         .counter-total { background: #f3e5f5; color: #6a1b9a; border: 1px solid #ce93d8; }
         .counter-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
         .dot-csv { background: #1976d2; }
         .dot-firebase { background: #d32f2f; }
+        .dot-reports { background: #ffab40; }
+        
         .map-legend { background: white; padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.7; }
         .legend-item { display: flex; align-items: center; gap: 8px; }
+        
         .radar-popup { font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; }
         .radar-popup h3 { margin: 0 0 8px 0; font-size: 15px; color: #1976d2; border-bottom: 2px solid #e0e0e0; padding-bottom: 6px; }
         .radar-popup .info-row { display: flex; justify-content: space-between; margin: 3px 0; }
@@ -103,14 +101,15 @@
         .radar-popup .type-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; }
         .badge-csv { background: #1976d2; }
         .badge-firebase { background: #d32f2f; }
+        .badge-report { background: #ffab40; color: #333; }
         .delete-btn { margin-top: 10px; padding: 8px 16px; background: #d32f2f; color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; width: 100%; }
         .delete-btn:hover { background: #b71c1c; }
+        
         #statusBar { background: #fff3cd; color: #856404; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; display: none; align-items: center; gap: 10px; border: 1px solid #ffeaa7; }
         #statusBar.visible { display: flex; }
         .status-spinner { border: 2px solid #f3f3f3; border-top: 2px solid #856404; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; flex-shrink: 0; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* === BANNIERE ADMIN === */
         #authBanner {
             background: #e8f5e9;
             color: #2e7d32;
@@ -127,24 +126,40 @@
         #authBanner.visible { display: flex; }
         #authBanner.error { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
         #logoutBtn {
-            background: #ef5350;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            font-weight: bold;
+            background: #ef5350; color: white; border: none; padding: 5px 12px;
+            border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: bold;
         }
         #logoutBtn:hover { background: #c62828; }
+
+        .report-emoji {
+            background: white;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            border: 2px solid #ffab40;
+        }
+        .report-age {
+            display: inline-block;
+            background: #ffab40;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 6px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📍 Ajouter un nouveau radar</h2>
+    <h2>📍 Admin RadarZen — Radars & Signalements</h2>
     
-    <!-- Banniere d'authentification -->
     <div id="authBanner">
         <span id="authText">Connexion...</span>
         <button id="logoutBtn" onclick="logout()">Déconnexion</button>
@@ -153,6 +168,7 @@
     <div class="radar-counter">
         <div class="counter-item counter-csv"><span class="counter-dot dot-csv"></span><span id="csvCount">CSV : 0</span></div>
         <div class="counter-item counter-firebase"><span class="counter-dot dot-firebase"></span><span id="firebaseCount">Firebase : 0</span></div>
+        <div class="counter-item counter-reports"><span class="counter-dot dot-reports"></span><span id="reportsCount">Signalements : 0</span></div>
         <div class="counter-item counter-total"><span id="totalCount">Total : 0</span></div>
     </div>
 
@@ -194,7 +210,7 @@
                 <button type="submit" id="submitBtn" disabled>💾 Enregistrer dans Firebase</button>
                 <div id="message" class="message"></div>
             </form>
-            <div class="map-hint">💡 Clique sur la carte pour positionner le radar. Clique sur un point rouge pour le supprimer.</div>
+            <div class="map-hint">💡 Cliquez sur la carte pour positionner un radar. Les signalements orange se rafraîchissent toutes les 30s.</div>
             <div id="statusBar"><div class="status-spinner"></div><span id="statusText">Chargement...</span></div>
         </div>
 
@@ -234,19 +250,22 @@
         "ETM": "📡 Radar mobile classique", "ETC": "🚂 Radar passage à niveau"
     };
 
+    // === SIGNALEMENTS : emojis + noms ===
+    const REPORT_EMOJIS = {
+        "ACCIDENT": "🚗", "OBSTACLE": "🪨", "ANIMAL": "🦌",
+        "TRAVAUX": "🚧", "AUTRE": "⚠️"
+    };
+    const REPORT_NAMES = {
+        "ACCIDENT": "Accident", "OBSTACLE": "Obstacle", "ANIMAL": "Animal",
+        "TRAVAUX": "Travaux", "AUTRE": "Danger"
+    };
+    const REPORT_TTL_MS = 60 * 60 * 1000; // 60 minutes
+
     // Styles des points
-    const STYLE_CSV = {
-        radius: 4, fillColor: '#1976d2', color: '#0d47a1',
-        weight: 1, opacity: 0.8, fillOpacity: 0.6
-    };
-    const STYLE_FIREBASE = {
-        radius: 7, fillColor: '#d32f2f', color: '#ffffff',
-        weight: 2, opacity: 1, fillOpacity: 0.9
-    };
-    const STYLE_NEW = {
-        radius: 9, fillColor: '#4caf50', color: '#ffffff',
-        weight: 2, opacity: 1, fillOpacity: 0.9
-    };
+    const STYLE_CSV = { radius: 4, fillColor: '#1976d2', color: '#0d47a1', weight: 1, opacity: 0.8, fillOpacity: 0.6 };
+    const STYLE_FIREBASE = { radius: 7, fillColor: '#d32f2f', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.9 };
+    const STYLE_REPORT = { radius: 11, fillColor: '#ffab40', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.95 };
+    const STYLE_NEW = { radius: 9, fillColor: '#4caf50', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.9 };
 
     const canvasRenderer = L.canvas({ padding: 0.5 });
     const map = L.map('map').setView([46.603354, 1.888334], 6);
@@ -258,12 +277,9 @@
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri', maxZoom: 19
     });
-    
-    // ✅ CORRECTION : Labels Esri (gratuit, sans clé API) au lieu de CARTO
     const labelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Labels &copy; Esri', maxZoom: 19
     });
-    
     const satelliteWithLabels = L.layerGroup([satelliteLayer, labelsLayer]);
 
     L.control.layers({
@@ -274,23 +290,33 @@
 
     const csvGroup = L.layerGroup().addTo(map);
     const firebaseGroup = L.layerGroup().addTo(map);
+    const reportsGroup = L.layerGroup().addTo(map);
+
+    // Control de couches pour les overlays
+    L.control.layers(null, {
+        "🔵 Radars CSV": csvGroup,
+        "🔴 Radars Firebase": firebaseGroup,
+        "🟠 Signalements (live)": reportsGroup
+    }, { position: 'topright' }).addTo(map);
 
     let newMarker = null;
-    let csvCount = 0, firebaseCount = 0;
+    let csvCount = 0, firebaseCount = 0, reportsCount = 0;
 
+    // === LEGENDE ===
     const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = function() {
         const div = L.DomUtil.create('div', 'map-legend');
         div.innerHTML = `
-            <div class="legend-item"><span class="counter-dot dot-csv"></span> Radars CSV (points bleus)</div>
-            <div class="legend-item"><span class="counter-dot dot-firebase"></span> Radars Firebase (points rouges)</div>
+            <div class="legend-item"><span class="counter-dot dot-csv"></span> Radars CSV (officiels)</div>
+            <div class="legend-item"><span class="counter-dot dot-firebase"></span> Radars Firebase (admin)</div>
+            <div class="legend-item"><span class="counter-dot dot-reports"></span> Signalements (60 min)</div>
             <div class="legend-item"><span class="counter-dot" style="background:#4caf50;"></span> Radar en cours (vert)</div>
         `;
         return div;
     };
     legend.addTo(map);
 
-    // === GESTION AUTHENTIFICATION ===
+    // === AUTH ===
     const authBanner = document.getElementById('authBanner');
     const authText = document.getElementById('authText');
     
@@ -340,7 +366,8 @@
     function updateCounters() {
         document.getElementById('csvCount').textContent = `CSV : ${csvCount}`;
         document.getElementById('firebaseCount').textContent = `Firebase : ${firebaseCount}`;
-        document.getElementById('totalCount').textContent = `Total : ${csvCount + firebaseCount}`;
+        document.getElementById('reportsCount').textContent = `Signalements : ${reportsCount}`;
+        document.getElementById('totalCount').textContent = `Total : ${csvCount + firebaseCount + reportsCount}`;
     }
 
     function showStatus(text) {
@@ -359,6 +386,37 @@
         } catch (e) { clearTimeout(id); throw e; }
     }
 
+    // === Temps relatif (il y a X min) ===
+    function timeAgo(timestamp) {
+        const diff = Date.now() - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return "à l'instant";
+        if (minutes < 60) return `il y a ${minutes} min`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `il y a ${hours}h`;
+        return `il y a ${Math.floor(hours / 24)}j`;
+    }
+
+    // === Popup signalement ===
+    function createReportPopup(report, docId) {
+        const type = report.type || "AUTRE";
+        const emoji = REPORT_EMOJIS[type] || "⚠️";
+        const name = REPORT_NAMES[type] || type;
+        const age = timeAgo(report.timestamp);
+        let delBtn = '';
+        if (auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
+            delBtn = `<button class="delete-btn" onclick="window.deleteReport('${docId}','${name}')">🗑️ Supprimer ce signalement</button>`;
+        }
+        return `<div class="radar-popup">
+            <h3>${emoji} ${name} <span class="report-age">${age}</span></h3>
+            <div class="info-row"><span class="info-label">Signalé par :</span><span class="info-value">Utilisateur RadarZen</span></div>
+            <div class="info-row"><span class="info-label">Position :</span><span class="info-value">${report.lat.toFixed(4)}, ${report.lon.toFixed(4)}</span></div>
+            <div class="info-row"><span class="info-label">Expiration :</span><span class="info-value">${timeAgo(report.timestamp - REPORT_TTL_MS).replace("il y a ", "dans ")}</span></div>
+            ${delBtn}
+        </div>`;
+    }
+
+    // === Popup radar ===
     function createPopup(radar, source, docId = null) {
         const typeCode = radar["Type de radar"] || "?";
         const typeName = TYPE_NAMES[typeCode] || typeCode;
@@ -434,7 +492,7 @@
     }
 
     async function loadFirebaseRadars() {
-        showStatus("🔥 Chargement Firebase...");
+        showStatus("🔥 Chargement radars Firebase...");
         try {
             const snapshot = await getDocs(collection(db, "radars"));
             let maxNumber = 4999;
@@ -467,6 +525,65 @@
         }
     }
 
+    // === CHARGEMENT SIGNALEMENTS (avec refresh auto) ===
+    async function loadReports() {
+        try {
+            const now = Date.now();
+            const snapshot = await getDocs(collection(db, "reports"));
+            
+            // Nettoyer l'ancienne couche
+            reportsGroup.clearLayers();
+            reportsCount = 0;
+            let expiredToDelete = [];
+
+            snapshot.forEach(ds => {
+                const data = ds.data();
+                const docId = ds.id;
+                const ts = data.timestamp || 0;
+                const lat = parseFloat(data.lat);
+                const lon = parseFloat(data.lon);
+                const type = data.type || "AUTRE";
+                
+                // Filtrer les signalements expires (> 60 min)
+                if (now - ts > REPORT_TTL_MS) {
+                    expiredToDelete.push(docId);
+                    return;
+                }
+                
+                if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                    const emoji = REPORT_EMOJIS[type] || "⚠️";
+                    
+                    // Marqueur DivIcon avec emoji
+                    const icon = L.divIcon({
+                        className: 'report-emoji',
+                        html: emoji,
+                        iconSize: [26, 26],
+                        iconAnchor: [13, 13]
+                    });
+                    
+                    const m = L.marker([lat, lon], { icon: icon });
+                    m.bindPopup(createReportPopup({ lat, lon, type, timestamp: ts }, docId));
+                    m._docId = docId;
+                    reportsGroup.addLayer(m);
+                    reportsCount++;
+                }
+            });
+
+            // Supprimer les signalements expires (nettoyage automatique)
+            if (expiredToDelete.length > 0 && auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
+                for (const docId of expiredToDelete) {
+                    try {
+                        await deleteDoc(doc(db, "reports", docId));
+                    } catch (e) { /* ignore */ }
+                }
+            }
+
+            updateCounters();
+        } catch (error) {
+            console.warn("⚠️ Erreur chargement signalements:", error);
+        }
+    }
+
     let nextRadarNumber = 5000;
     let isAdmin = false;
 
@@ -487,14 +604,18 @@
             submitBtn.textContent = "🔒 Lecture seule (connectez-vous pour ajouter)";
         }
 
+        // Charger les signalements immediatement
+        await loadReports();
+        
+        // Charger le CSV
         loadCSVRadars();
+        
+        // Rafraichir les signalements toutes les 30 secondes
+        setInterval(loadReports, 30000);
     }
 
     window.deleteRadar = async function(docId, radarNumber) {
-        if (!isAdmin) {
-            alert("❌ Seuls les admins peuvent supprimer.");
-            return;
-        }
+        if (!isAdmin) { alert("❌ Seuls les admins peuvent supprimer."); return; }
         if (!confirm(`⚠️ Supprimer le radar #${radarNumber} ?\nAction irréversible.`)) return;
         try {
             await deleteDoc(doc(db, "radars", docId));
@@ -504,6 +625,20 @@
             firebaseCount--;
             updateCounters();
             alert(`✅ Radar #${radarNumber} supprimé !`);
+        } catch (e) { alert(`❌ Erreur : ${e.message}`); }
+    };
+
+    window.deleteReport = async function(docId, reportName) {
+        if (!isAdmin) { alert("❌ Seuls les admins peuvent supprimer."); return; }
+        if (!confirm(`⚠️ Supprimer ce signalement "${reportName}" ?`)) return;
+        try {
+            await deleteDoc(doc(db, "reports", docId));
+            reportsGroup.eachLayer(layer => {
+                if (layer._docId === docId) reportsGroup.removeLayer(layer);
+            });
+            reportsCount--;
+            updateCounters();
+            alert(`✅ Signalement supprimé !`);
         } catch (e) { alert(`❌ Erreur : ${e.message}`); }
     };
 
@@ -549,10 +684,7 @@
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        if (!isAdmin) {
-            alert("❌ Vous devez être connecté en admin pour ajouter un radar.");
-            return;
-        }
+        if (!isAdmin) { alert("❌ Vous devez être connecté en admin pour ajouter un radar."); return; }
 
         const msg = document.getElementById('message');
         const btn = document.getElementById('submitBtn');
