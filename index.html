@@ -71,19 +71,33 @@
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: background 0.3s, transform 0.1s;
             margin-top: 10px;
         }
         button:hover {
             background-color: #3367D6;
         }
+        button:active {
+            transform: scale(0.98);
+        }
+        #gpsBtn {
+            background-color: #34A853;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            padding: 10px;
+        }
+        #gpsBtn:hover {
+            background-color: #2D8E47;
+        }
         #map {
-            height: 400px;
+            height: 450px;
             width: 100%;
             border-radius: 8px;
-            margin-top: 25px;
+            margin-top: 15px;
             border: 2px solid #e0e0e0;
             z-index: 1;
+            cursor: crosshair; /* Indique visuellement qu'on peut cliquer */
         }
         .message {
             margin-top: 15px;
@@ -100,6 +114,17 @@
             color: #666;
             margin-top: 4px;
             text-align: center;
+        }
+        .map-hint {
+            background-color: #e8f0fe;
+            color: #1967d2;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            border: 1px solid #d2e3fc;
         }
     </style>
 </head>
@@ -137,20 +162,21 @@
             </div>
             <div class="form-group">
                 <label for="latitude">Latitude</label>
-                <input type="number" step="any" id="latitude" required placeholder="ex: 45.361">
+                <input type="number" step="any" id="latitude" required placeholder="Clique sur la carte !">
             </div>
             <div class="form-group">
                 <label for="longitude">Longitude</label>
-                <input type="number" step="any" id="longitude" required placeholder="ex: 4.2526">
+                <input type="number" step="any" id="longitude" required placeholder="Clique sur la carte !">
             </div>
         </div>
 
+        <button type="button" id="gpsBtn">📍 Utiliser ma position GPS actuelle</button>
         <button type="submit">💾 Enregistrer dans Firebase</button>
         <div id="message" class="message"></div>
     </form>
 
+    <div class="map-hint">💡 Astuce : Zoome sur la carte et <strong>clique</strong> à l'endroit exact du radar pour remplir automatiquement la latitude et la longitude.</div>
     <div id="map"></div>
-    <div class="hint">💡 Cliquez n'importe où sur la carte pour définir automatiquement la position du radar</div>
 </div>
 
 <!-- Leaflet JS -->
@@ -174,7 +200,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Initialisation de la carte (Centrée sur la France par défaut)
+    // Initialisation de la carte (Centrée sur la France)
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -184,30 +210,67 @@
 
     let marker = null;
 
-    // Fonction pour mettre à jour la position du marqueur et les champs
-    function updatePosition(lat, lng) {
-        document.getElementById('latitude').value = lat.toFixed(6);
-        document.getElementById('longitude').value = lng.toFixed(6);
+    // Fonction centrale pour mettre à jour la position
+    function updatePosition(lat, lng, source = "carte") {
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+        
+        latInput.value = lat.toFixed(6);
+        lngInput.value = lng.toFixed(6);
+
+        // Animation visuelle pour montrer que ça a fonctionné
+        latInput.style.borderColor = "#34A853";
+        lngInput.style.borderColor = "#34A853";
+        setTimeout(() => {
+            latInput.style.borderColor = "#ccc";
+            lngInput.style.borderColor = "#ccc";
+        }, 1500);
 
         if (marker) {
             marker.setLatLng([lat, lng]);
         } else {
             marker = L.marker([lat, lng]).addTo(map);
         }
-        map.setView([lat, lng], 14);
+        
+        map.setView([lat, lng], 16); // Zoom fort sur le point sélectionné
+        
+        console.log(`Position mise à jour via ${source}:`, lat, lng);
     }
 
-    // Clic sur la carte pour positionner le radar
+    // 1. Clic sur la carte pour positionner le radar
     map.on('click', function(e) {
-        updatePosition(e.latlng.lat, e.latlng.lng);
+        updatePosition(e.latlng.lat, e.latlng.lng, "clic carte");
     });
 
-    // Géolocalisation de l'utilisateur au chargement (optionnel mais pratique)
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-            map.setView([position.coords.latitude, position.coords.longitude], 10);
-        });
-    }
+    // 2. Bouton pour utiliser le GPS du navigateur
+    document.getElementById('gpsBtn').addEventListener('click', function() {
+        if (!navigator.geolocation) {
+            alert("La géolocalisation n'est pas supportée par votre navigateur.");
+            return;
+        }
+
+        this.textContent = "⏳ Localisation en cours...";
+        this.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                updatePosition(position.coords.latitude, position.coords.longitude, "GPS appareil");
+                this.textContent = "📍 Utiliser ma position GPS actuelle";
+                this.disabled = false;
+            },
+            (error) => {
+                let errorMsg = "Impossible de récupérer la position.";
+                if (error.code === 1) errorMsg = "Veuillez autoriser l'accès à la localisation dans votre navigateur.";
+                if (error.code === 2) errorMsg = "Position indisponible.";
+                if (error.code === 3) errorMsg = "Délai d'attente dépassé.";
+                
+                alert(errorMsg);
+                this.textContent = "📍 Utiliser ma position GPS actuelle";
+                this.disabled = false;
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
 
     // Gestion de la soumission du formulaire
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
@@ -225,7 +288,6 @@
         const minutes = String(dateInput.getMinutes()).padStart(2, '0');
         const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}`;
 
-        // Les clés correspondent exactement aux en-têtes de votre CSV pour faciliter l'export
         const radarData = {
             "Numero de radar": document.getElementById('numero').value.trim(),
             "Type de radar": document.getElementById('type').value,
@@ -233,7 +295,7 @@
             "VMA": parseInt(document.getElementById('vma').value, 10),
             "Latitude": parseFloat(document.getElementById('latitude').value),
             "Longitude": parseFloat(document.getElementById('longitude').value),
-            "timestamp": Date.now() // Utile pour trier les ajouts récents
+            "timestamp": Date.now()
         };
 
         try {
@@ -242,15 +304,16 @@
             messageDiv.className = 'message success';
             messageDiv.style.display = 'block';
             
-            // Réinitialiser le formulaire après 2 secondes
+            // Réinitialiser le formulaire après 2.5 secondes
             setTimeout(() => {
                 document.getElementById('radarForm').reset();
                 if (marker) {
                     map.removeLayer(marker);
                     marker = null;
                 }
+                map.setView([46.603354, 1.888334], 6); // Retour à la vue France
                 messageDiv.style.display = 'none';
-            }, 3000);
+            }, 2500);
             
         } catch (error) {
             console.error("Erreur lors de l'ajout : ", error);
