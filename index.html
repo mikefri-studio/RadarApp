@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ajout de Radars - RadarApp</title>
+    <title>Ajout de Radars - RadarZen</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -15,7 +15,6 @@
             padding: 15px;
             background: #f0f2f5;
         }
-        /* Conteneur pleine largeur */
         .container {
             background: white;
             padding: 20px;
@@ -51,7 +50,6 @@
             z-index: 1;
         }
         
-        /* === MOBILE / TABLETTE : retour en 1 colonne === */
         @media (max-width: 1024px) {
             .main-layout { grid-template-columns: 1fr; }
             .map-column { position: static; }
@@ -87,7 +85,6 @@
         }
         #customTypeGroup { display: none; margin-top: 8px; }
         #customTypeGroup.visible { display: block; }
-        .type-info { background: #fff8e1; border-left: 4px solid #fbc02d; padding: 6px 10px; font-size: 11px; color: #5d4037; border-radius: 4px; margin-top: 5px; }
         .auto-number { background: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; font-weight: bold; font-size: 18px; text-align: center; cursor: not-allowed; }
         .auto-number-info { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 6px 10px; font-size: 11px; color: #2e7d32; border-radius: 4px; margin-top: 5px; }
         .radar-counter { display: flex; gap: 12px; justify-content: center; margin: 10px 0 15px 0; flex-wrap: wrap; }
@@ -114,12 +111,47 @@
         #statusBar.visible { display: flex; }
         .status-spinner { border: 2px solid #f3f3f3; border-top: 2px solid #856404; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; flex-shrink: 0; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* === BANNIERE ADMIN === */
+        #authBanner {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #81c784;
+        }
+        #authBanner.visible { display: flex; }
+        #authBanner.error { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+        #logoutBtn {
+            background: #ef5350;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #logoutBtn:hover { background: #c62828; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>📍 Ajouter un nouveau radar</h2>
+    
+    <!-- Banniere d'authentification -->
+    <div id="authBanner">
+        <span id="authText">Connexion...</span>
+        <button id="logoutBtn" onclick="logout()">Déconnexion</button>
+    </div>
+
     <div class="radar-counter">
         <div class="counter-item counter-csv"><span class="counter-dot dot-csv"></span><span id="csvCount">CSV : 0</span></div>
         <div class="counter-item counter-firebase"><span class="counter-dot dot-firebase"></span><span id="firebaseCount">Firebase : 0</span></div>
@@ -127,7 +159,6 @@
     </div>
 
     <div class="main-layout">
-        <!-- COLONNE GAUCHE : FORMULAIRE -->
         <div class="form-column">
             <form id="radarForm">
                 <div class="row">
@@ -169,7 +200,6 @@
             <div id="statusBar"><div class="status-spinner"></div><span id="statusText">Chargement...</span></div>
         </div>
 
-        <!-- COLONNE DROITE : GRANDE CARTE -->
         <div class="map-column">
             <div id="map"></div>
         </div>
@@ -182,6 +212,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAESYQeZY2bczUK1CqzJyV77G74C1jrMCI",
@@ -192,8 +223,12 @@
         appId: "1:778786332416:web:5c9eedfcabb1cf2c3e5de5"
     };
 
+    const ADMIN_EMAIL = "admin@radarzen.app";
+    const ADMIN_UID = "JJ8wm4Sh7cPOX4PviA8kzxQ7x7j2";
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
     const CSV_URL = "https://raw.githubusercontent.com/mikefri-studio/RadarApp/refs/heads/master/app/src/main/assets/radars.csv";
 
     const TYPE_NAMES = {
@@ -203,7 +238,6 @@
     };
 
     const canvasRenderer = L.canvas({ padding: 0.5 });
-
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
     const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -244,6 +278,58 @@
     };
     legend.addTo(map);
 
+    // === GESTION AUTHENTIFICATION ===
+    const authBanner = document.getElementById('authBanner');
+    const authText = document.getElementById('authText');
+    
+    function showAuthStatus(message, isError = false) {
+        authText.textContent = message;
+        authBanner.className = 'visible' + (isError ? ' error' : '');
+        authBanner.classList.add('visible');
+    }
+    
+    function hideAuthBanner() {
+        authBanner.classList.remove('visible');
+    }
+
+    window.logout = async function() {
+        await signOut(auth);
+        location.reload();
+    };
+
+    async function ensureLoggedIn() {
+        return new Promise((resolve) => {
+            const unsub = onAuthStateChanged(auth, async (user) => {
+                if (user && user.uid === ADMIN_UID) {
+                    showAuthStatus(`✅ Connecté en tant qu'admin (${user.email})`);
+                    resolve(true);
+                    unsub();
+                } else if (user) {
+                    showAuthStatus('❌ Compte non autorisé', true);
+                    await signOut(auth);
+                    resolve(false);
+                    unsub();
+                } else {
+                    // Pas connecte : demander le mot de passe
+                    const pwd = prompt("🔐 Mot de passe admin RadarZen :");
+                    if (pwd) {
+                        try {
+                            await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pwd);
+                            resolve(true);
+                        } catch (e) {
+                            showAuthStatus(`❌ ${e.message}`, true);
+                            resolve(false);
+                        }
+                    } else {
+                        showAuthStatus('❌ Connexion annulée - mode lecture seule', true);
+                        resolve(false);
+                    }
+                    unsub();
+                }
+            });
+        });
+    }
+
     function updateCounters() {
         document.getElementById('csvCount').textContent = `CSV : ${csvCount}`;
         document.getElementById('firebaseCount').textContent = `Firebase : ${firebaseCount}`;
@@ -272,7 +358,8 @@
         const badgeClass = source === 'csv' ? 'badge-csv' : 'badge-firebase';
         const radarNumber = radar["Numero de radar"] || '?';
         let delBtn = '';
-        if (source === 'firebase' && docId) {
+        // Bouton suppr seulement si admin connecte
+        if (source === 'firebase' && docId && auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
             delBtn = `<button class="delete-btn" onclick="window.deleteRadar('${docId}','${radarNumber}')">🗑️ Supprimer ce radar</button>`;
         }
         return `<div class="radar-popup">
@@ -377,20 +464,35 @@
     }
 
     let nextRadarNumber = 5000;
+    let isAdmin = false;
 
     async function init() {
         const numeroInput = document.getElementById('numero');
         const submitBtn = document.getElementById('submitBtn');
 
+        // Authentification admin
+        isAdmin = await ensureLoggedIn();
+
         const maxFb = await loadFirebaseRadars();
         nextRadarNumber = Math.max(4999, maxFb) + 1;
         numeroInput.value = nextRadarNumber;
-        submitBtn.disabled = false;
+        
+        // Activer le bouton seulement si admin
+        if (isAdmin) {
+            submitBtn.disabled = false;
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "🔒 Lecture seule (connectez-vous pour ajouter)";
+        }
 
         loadCSVRadars();
     }
 
     window.deleteRadar = async function(docId, radarNumber) {
+        if (!isAdmin) {
+            alert("❌ Seuls les admins peuvent supprimer.");
+            return;
+        }
         if (!confirm(`⚠️ Supprimer le radar #${radarNumber} ?\nAction irréversible.`)) return;
         try {
             await deleteDoc(doc(db, "radars", docId));
@@ -440,6 +542,12 @@
 
     document.getElementById('radarForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        
+        if (!isAdmin) {
+            alert("❌ Vous devez être connecté en admin pour ajouter un radar.");
+            return;
+        }
+
         const msg = document.getElementById('message');
         const btn = document.getElementById('submitBtn');
         msg.style.display = 'none';
