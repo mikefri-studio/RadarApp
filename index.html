@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ajout de Radars - RadarApp</title>
     
-    <!-- Leaflet CSS (Carte style OpenStreetMap/Google Maps) -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -97,7 +97,14 @@
             margin-top: 15px;
             border: 2px solid #e0e0e0;
             z-index: 1;
-            cursor: crosshair; /* Indique visuellement qu'on peut cliquer */
+            cursor: crosshair;
+        }
+        /* Personnalisation du contrôle de calques Leaflet pour qu'il soit plus joli */
+        .leaflet-control-layers {
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
         }
         .message {
             margin-top: 15px;
@@ -175,7 +182,7 @@
         <div id="message" class="message"></div>
     </form>
 
-    <div class="map-hint">💡 Astuce : Zoome sur la carte et <strong>clique</strong> à l'endroit exact du radar pour remplir automatiquement la latitude et la longitude.</div>
+    <div class="map-hint">💡 Astuce : Utilise le bouton en haut à droite de la carte pour passer en vue <strong>Satellite</strong>, puis clique à l'endroit exact du radar.</div>
     <div id="map"></div>
 </div>
 
@@ -200,13 +207,30 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Initialisation de la carte (Centrée sur la France)
+    // Initialisation de la carte
     const map = L.map('map').setView([46.603354, 1.888334], 6);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 1. Couche Plan (OpenStreetMap)
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
-    }).addTo(map);
+    });
+
+    // 2. Couche Satellite (Esri World Imagery - Gratuit et sans clé API)
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        maxZoom: 19
+    });
+
+    // Ajouter le plan par défaut
+    osmLayer.addTo(map);
+
+    // Ajouter le contrôle pour basculer entre Plan et Satellite
+    const baseMaps = {
+        "🗺️ Plan (Rues)": osmLayer,
+        "🛰️ Satellite (Vue aérienne)": satelliteLayer
+    };
+    L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
     let marker = null;
 
@@ -232,7 +256,7 @@
             marker = L.marker([lat, lng]).addTo(map);
         }
         
-        map.setView([lat, lng], 16); // Zoom fort sur le point sélectionné
+        map.setView([lat, lng], 17); // Zoom très fort pour bien valider la position
         
         console.log(`Position mise à jour via ${source}:`, lat, lng);
     }
